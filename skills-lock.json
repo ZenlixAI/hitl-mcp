@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "skills": {
+    "git-squash": {
+      "source": "paulrberg/agent-skills",
+      "sourceType": "github",
+      "computedHash": "eaafc547e2cffec41ca7c194ff7ef183601c7269cab3222c58192db522e41c35"
+    },
+    "mcp-app-builder": {
+      "source": "alpic-ai/skybridge",
+      "sourceType": "github",
+      "computedHash": "2ab905967a83816601ec0a3a2afbc8e1a81906de579df2121768d47a3c86e717"
+    }
+  }
+}
