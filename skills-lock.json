@@ -6,6 +6,11 @@
       "sourceType": "github",
       "computedHash": "eaafc547e2cffec41ca7c194ff7ef183601c7269cab3222c58192db522e41c35"
     },
+    "hono": {
+      "source": "yusukebe/hono-skill",
+      "sourceType": "github",
+      "computedHash": "220e5e1b12bbaeec49ec362b6e2262d77632d0536e9758bba9acbbc323fef990"
+    },
     "mcp-app-builder": {
       "source": "alpic-ai/skybridge",
       "sourceType": "github",
