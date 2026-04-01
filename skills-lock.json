@@ -15,6 +15,11 @@
       "source": "alpic-ai/skybridge",
       "sourceType": "github",
       "computedHash": "2ab905967a83816601ec0a3a2afbc8e1a81906de579df2121768d47a3c86e717"
+    },
+    "mcp-apps-builder": {
+      "source": "mcp-use/mcp-use",
+      "sourceType": "github",
+      "computedHash": "865d12e9e498530d7c667a4d263ea76e315cec5c9bc37b5f57735751df934fc3"
     }
   }
 }
