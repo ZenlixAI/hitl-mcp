@@ -167,6 +167,180 @@ curl -X PUT "http://localhost:3000/api/v1/question-groups/qg_release_001/answers
   }'
 ```
 
+## Detailed MCP Tool Specification
+
+### 1) `hitl_ask_question_group`
+
+Purpose:
+- Create a question group and block until it reaches a terminal state (`answered`, `cancelled`, `expired`).
+
+Input (important fields):
+- `question_group_id` (string, required)
+- `title` (string, required)
+- `description` (string, optional, markdown)
+- `tags` (string[], optional)
+- `extra` (object, optional)
+- `ttl_seconds` (number, optional)
+- `questions` (array, required)
+- `idempotency_key` (string, optional)
+- `metadata.agent_session_id` / `metadata.agent_trace_id` (optional)
+
+Question types:
+- `single_choice` with `options[]`
+- `multi_choice` with `options[]`
+- `text` with optional `text_constraints`
+- `boolean`
+- `range` with `range_constraints`
+
+Output:
+- On finalize success: status `answered` + validated `answers`
+- On cancel: status `cancelled`
+- On expire: status `expired`
+
+Notes:
+- This tool is intentionally blocking.
+- If `HITL_PENDING_MAX_WAIT_SECONDS=0`, wait is unbounded.
+
+### 2) `hitl_get_question_group_status`
+
+Purpose:
+- Query group lifecycle state by ID.
+
+Input:
+- `question_group_id` (string)
+
+Output:
+- `question_group_id`
+- `status` (`pending|answered|cancelled|expired`)
+- `updated_at`
+
+### 3) `hitl_get_question`
+
+Purpose:
+- Fetch one question definition by `question_id`.
+
+Input:
+- `question_id` (string)
+
+Output:
+- Full question object.
+
+### 4) `hitl_cancel_question_group`
+
+Purpose:
+- Cancel a pending group and wake blocked ask call.
+
+Input:
+- `question_group_id` (string)
+- `reason` (string, optional)
+
+Output:
+- `status: "cancelled"`
+- Optional `reason`
+
+## Detailed HTTP API Specification
+
+Base path:
+- `/api/v1`
+
+Common response envelope:
+
+```json
+{
+  "request_id": "uuid",
+  "success": true,
+  "data": {},
+  "error": null
+}
+```
+
+### `GET /healthz`
+
+Purpose:
+- Liveness check.
+
+Success:
+- `200` with `data.status = "ok"`.
+
+### `GET /question-groups/{question_group_id}`
+
+Purpose:
+- Fetch a question group by ID.
+
+Errors:
+- `404 QUESTION_GROUP_NOT_FOUND`
+
+### `GET /questions/{question_id}`
+
+Purpose:
+- Fetch one question by ID.
+
+Errors:
+- `404 QUESTION_NOT_FOUND`
+
+### `PUT /question-groups/{question_group_id}/answers/finalize`
+
+Purpose:
+- Submit final, post-processed answers from backend.
+
+Request body:
+
+```json
+{
+  "idempotency_key": "idem-1",
+  "answers": {
+    "q_1": { "value": "A" }
+  },
+  "finalized_by": "agent-server",
+  "extra": {}
+}
+```
+
+Behavior:
+- Validates answer type/range/required rules.
+- If invalid: keeps group `pending`.
+- If valid: transitions group to `answered` and wakes blocked MCP ask.
+
+Success:
+- `200` with `status: "answered"` and `answered_question_ids`.
+
+Validation error:
+- `422 ANSWER_VALIDATION_FAILED` with per-question details.
+
+Idempotency:
+- Reusing same `idempotency_key` returns same finalize result.
+
+### `POST /question-groups/{question_group_id}/cancel`
+
+Purpose:
+- Cancel a pending group.
+
+Behavior:
+- Marks group `cancelled`.
+- Wakes blocked MCP ask with terminal state.
+
+### `POST /question-groups/{question_group_id}/expire`
+
+Purpose:
+- Force-expire a group.
+
+Behavior:
+- Marks group `expired`.
+- Wakes blocked MCP ask with terminal state.
+
+### Authentication
+
+When `HITL_API_KEY` is set:
+- Protected routes require `x-api-key`.
+- Missing/invalid key returns `401 UNAUTHORIZED`.
+
+### Error codes used by HTTP APIs
+
+- `QUESTION_GROUP_NOT_FOUND` (`404`)
+- `QUESTION_NOT_FOUND` (`404`)
+- `ANSWER_VALIDATION_FAILED` (`422`)
+- `UNAUTHORIZED` (`401`)
+
 ## API References
 
 - MCP tools: [docs/api/mcp-tools.md](docs/api/mcp-tools.md)
