@@ -25,3 +25,16 @@ describe('security auth middleware', () => {
     expect(res.status).toBe(404);
   });
 });
+
+describe('security auth optional mode', () => {
+  afterEach(() => {
+    delete process.env.HITL_API_KEY;
+  });
+
+  it('allows unauthenticated access when HITL_API_KEY is not set', async () => {
+    delete process.env.HITL_API_KEY;
+    const app = await createHttpApp();
+    const res = await app.request('/api/v1/question-groups/qg_1');
+    expect(res.status).toBe(404);
+  });
+});
