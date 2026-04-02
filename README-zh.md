@@ -163,6 +163,180 @@ curl -X PUT "http://localhost:3000/api/v1/question-groups/qg_release_001/answers
   }'
 ```
 
+## MCP 工具详细说明
+
+### 1) `hitl_ask_question_group`
+
+用途：
+- 创建问题组，并阻塞等待直到进入终态（`answered`、`cancelled`、`expired`）。
+
+输入（关键字段）：
+- `question_group_id`（string，必填）
+- `title`（string，必填）
+- `description`（string，可选，支持 markdown）
+- `tags`（string[]，可选）
+- `extra`（object，可选）
+- `ttl_seconds`（number，可选）
+- `questions`（array，必填）
+- `idempotency_key`（string，可选）
+- `metadata.agent_session_id` / `metadata.agent_trace_id`（可选）
+
+题型支持：
+- `single_choice`（含 `options[]`）
+- `multi_choice`（含 `options[]`）
+- `text`（可选 `text_constraints`）
+- `boolean`
+- `range`（含 `range_constraints`）
+
+输出：
+- finalize 成功：`status=answered` + 校验后的 `answers`
+- 取消：`status=cancelled`
+- 过期：`status=expired`
+
+说明：
+- 该工具是“阻塞式”设计。
+- 当 `HITL_PENDING_MAX_WAIT_SECONDS=0` 时，为无限等待。
+
+### 2) `hitl_get_question_group_status`
+
+用途：
+- 按 ID 查询问题组生命周期状态。
+
+输入：
+- `question_group_id`（string）
+
+输出：
+- `question_group_id`
+- `status`（`pending|answered|cancelled|expired`）
+- `updated_at`
+
+### 3) `hitl_get_question`
+
+用途：
+- 按 `question_id` 查询题目定义。
+
+输入：
+- `question_id`（string）
+
+输出：
+- 题目完整对象。
+
+### 4) `hitl_cancel_question_group`
+
+用途：
+- 取消 pending 问题组，并唤醒阻塞中的 ask 调用。
+
+输入：
+- `question_group_id`（string）
+- `reason`（string，可选）
+
+输出：
+- `status: "cancelled"`
+- 可选 `reason`
+
+## HTTP API 详细说明
+
+基础路径：
+- `/api/v1`
+
+统一响应包裹：
+
+```json
+{
+  "request_id": "uuid",
+  "success": true,
+  "data": {},
+  "error": null
+}
+```
+
+### `GET /healthz`
+
+用途：
+- 健康检查。
+
+成功：
+- `200`，且 `data.status = "ok"`。
+
+### `GET /question-groups/{question_group_id}`
+
+用途：
+- 按 `question_group_id` 查询问题组。
+
+错误：
+- `404 QUESTION_GROUP_NOT_FOUND`
+
+### `GET /questions/{question_id}`
+
+用途：
+- 按 `question_id` 查询题目。
+
+错误：
+- `404 QUESTION_NOT_FOUND`
+
+### `PUT /question-groups/{question_group_id}/answers/finalize`
+
+用途：
+- 提交经过后端处理的最终答案。
+
+请求体：
+
+```json
+{
+  "idempotency_key": "idem-1",
+  "answers": {
+    "q_1": { "value": "A" }
+  },
+  "finalized_by": "agent-server",
+  "extra": {}
+}
+```
+
+行为：
+- 进行类型/范围/必答校验。
+- 若不合法：保持 `pending`。
+- 若合法：切换到 `answered` 并唤醒阻塞的 MCP ask 调用。
+
+成功：
+- `200`，包含 `status: "answered"` 与 `answered_question_ids`。
+
+校验失败：
+- `422 ANSWER_VALIDATION_FAILED`，并返回逐题错误详情。
+
+幂等：
+- 复用相同 `idempotency_key` 应返回同一 finalize 结果。
+
+### `POST /question-groups/{question_group_id}/cancel`
+
+用途：
+- 取消 pending 问题组。
+
+行为：
+- 状态置为 `cancelled`。
+- 唤醒阻塞中的 MCP ask 调用（终态返回）。
+
+### `POST /question-groups/{question_group_id}/expire`
+
+用途：
+- 强制使问题组过期。
+
+行为：
+- 状态置为 `expired`。
+- 唤醒阻塞中的 MCP ask 调用（终态返回）。
+
+### 鉴权
+
+当设置 `HITL_API_KEY` 时：
+- 受保护路由需要 `x-api-key` 请求头。
+- 缺失或错误返回 `401 UNAUTHORIZED`。
+
+### HTTP API 常见错误码
+
+- `QUESTION_GROUP_NOT_FOUND`（`404`）
+- `QUESTION_NOT_FOUND`（`404`）
+- `ANSWER_VALIDATION_FAILED`（`422`）
+- `UNAUTHORIZED`（`401`）
+
 ## 文档导航
 
 - MCP 工具契约：[docs/api/mcp-tools.md](docs/api/mcp-tools.md)
