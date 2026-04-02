@@ -1,87 +1,45 @@
-import { MCPServer } from "mcp-use/server";
+import { MCPServer } from 'mcp-use/server';
+import { HitlService } from './src/core/hitl-service';
+import { requestIdMiddleware } from './src/http/middleware/request-id';
+import { questionRoutes } from './src/http/routes/questions';
+import { questionGroupRoutes } from './src/http/routes/question-groups';
+import { ok } from './src/http/response';
+import { registerHitlTools } from './src/mcp/register-tools';
+import { Waiter } from './src/state/waiter';
+import { InMemoryHitlRepository } from './src/storage/in-memory-repository';
 
-// Create MCP server instance
 const server = new MCPServer({
-  name: ".tmp-hitl-mcp",
-  title: ".tmp-hitl-mcp", // display name
-  version: "1.0.0",
-  description: "Blank mcp-use server",
-  baseUrl: process.env.MCP_URL || "http://localhost:3000", // Full base URL (e.g., https://myserver.com)
-  favicon: "favicon.ico",
-  websiteUrl: "https://mcp-use.com", // Can be customized later
+  name: 'hitl-mcp',
+  title: 'HITL MCP',
+  version: '0.1.0',
+  description: 'Human-in-the-loop MCP server with HTTP control plane.',
+  baseUrl: process.env.MCP_URL || 'http://localhost:3000',
+  favicon: 'favicon.ico',
   icons: [
     {
-      src: "icon.svg",
-      mimeType: "image/svg+xml",
-      sizes: ["512x512"],
-    },
-  ],
+      src: 'icon.svg',
+      mimeType: 'image/svg+xml',
+      sizes: ['512x512']
+    }
+  ]
 });
 
-/**
- * Define UI Widgets
- * All React components in the `resources/` folder
- * are automatically registered as MCP tools and resources.
- *
- * Just export widgetMetadata with description and Zod schema,
- * and mcp-use handles the rest!
- *
- * Docs: https://mcp-use.com/docs/typescript/server/mcp-apps
- */
-
-/*
- * Define MCP tools
- * Docs: https://mcp-use.com/docs/typescript/server/tools
-
-server.tool(
-  {
-    name: "fetch-weather",
-    description: "Fetch the weather for a city",
-    schema: z.object({
-      city: z.string().describe("The city to fetch the weather for"),
-    }),
-  },
-  async ({ city }) => {
-    const response = await fetch(`https://wttr.in/${city}?format=j1`);
-    const data: any = await response.json();
-    const current = data.current_condition[0];
-    return text(`The weather in ${city} is ${current.weatherDesc[0].value}. Temperature: ${current.temp_C}°C, Humidity: ${current.humidity}%`);
-  }
+const repository = new InMemoryHitlRepository();
+const waiter = new Waiter();
+const service = new HitlService(
+  repository,
+  waiter,
+  Number(process.env.HITL_PENDING_MAX_WAIT_SECONDS || '0')
 );
- */
 
-/*
- * Define MCP resources
- * Docs: https://mcp-use.com/docs/typescript/server/resources
+registerHitlTools(server, service);
 
-server.resource({
-  name: "config",
-  uri: "config://settings",
-  description: "Server configuration",
-}, async () => object({
-  theme: "dark",
-  language: "en",
-}));
-*/
+server.use(requestIdMiddleware);
+server.app.get('/api/v1/healthz', (c) => {
+  return c.json(ok(c.get('requestId') ?? 'local', { status: 'ok' }));
+});
+server.app.route('/api/v1', questionGroupRoutes({ repository, waiter }));
+server.app.route('/api/v1', questionRoutes({ repository }));
 
-/*
- * Define MCP prompts
- * Docs: https://mcp-use.com/docs/typescript/server/prompts
-
-server.prompt(
-  {
-    name: "review-code",
-    description: "Review code for best practices and potential issues",
-    schema: z.object({
-      code: z.string().describe("The code to review"),
-    }),
-  },
-  async ({ code }) => {
-    return text(`Please review this code:\n\n${code}`);
-  }
-); */
-
-const PORT = process.env.PORT ? parseInt(process.env.PORT) : 3000;
-console.log(`Server running on port ${PORT}`);
-// Start the server
+const PORT = process.env.PORT ? parseInt(process.env.PORT, 10) : 3000;
 server.listen(PORT);
