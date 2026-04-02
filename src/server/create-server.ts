@@ -11,7 +11,7 @@ import { createRedisClient } from '../storage/redis-client';
 import { RedisHitlRepository } from '../storage/redis-hitl-repository';
 import { Waiter } from '../state/waiter';
 
-function resolveRepository(): HitlRepository {
+async function resolveRepository(): Promise<HitlRepository> {
   const useRedis = process.env.HITL_STORAGE === 'redis';
   if (!useRedis) return new InMemoryHitlRepository();
 
@@ -19,12 +19,24 @@ function resolveRepository(): HitlRepository {
   const prefix = process.env.HITL_REDIS_PREFIX || 'hitl';
   const ttlSeconds = Number(process.env.HITL_TTL_SECONDS || '604800');
   const redis = createRedisClient(redisUrl);
-  return new RedisHitlRepository(redis, prefix, ttlSeconds);
+
+  try {
+    await redis.connect();
+    await redis.ping();
+    return new RedisHitlRepository(redis, prefix, ttlSeconds);
+  } catch {
+    try {
+      await redis.quit();
+    } catch {
+      // ignore quit errors during fallback
+    }
+    return new InMemoryHitlRepository();
+  }
 }
 
 export async function createRuntime() {
   const app = new Hono();
-  const repository = resolveRepository();
+  const repository = await resolveRepository();
   const waiter = new Waiter();
   const service = new HitlService(repository, waiter, 0);
 
