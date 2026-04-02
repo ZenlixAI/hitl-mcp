@@ -22,6 +22,7 @@
   },
   "dependencies": {
     "hono": "^4.12.9",
+    "ioredis": "^5.10.1",
     "mcp-use": "latest",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
@@ -34,6 +35,7 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@types/supertest": "^7.2.0",
+    "ioredis-mock": "^8.13.1",
     "supertest": "^7.2.2",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
