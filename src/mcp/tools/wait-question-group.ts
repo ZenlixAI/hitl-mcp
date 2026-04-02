@@ -1,13 +1,7 @@
 import { object, error, type MCPServer } from 'mcp-use/server';
 import { waitQuestionGroupInputSchema } from '../../domain/schemas';
 import type { HitlService } from '../../core/hitl-service';
-
-function readCaller(ctx: any) {
-  return {
-    agent_identity: String(ctx?.state?.get?.('agentIdentity') ?? ''),
-    agent_session_id: String(ctx?.state?.get?.('agentSessionId') ?? '')
-  };
-}
+import { readCallerScopeFromMcpContext } from '../caller-scope';
 
 export function registerWaitQuestionGroupTool(server: MCPServer, service: HitlService) {
   server.tool(
@@ -20,7 +14,7 @@ export function registerWaitQuestionGroupTool(server: MCPServer, service: HitlSe
       try {
         return object(
           await service.waitQuestionGroup({
-            caller: readCaller(ctx),
+            caller: readCallerScopeFromMcpContext(ctx),
             question_group_id: input.question_group_id
           })
         );

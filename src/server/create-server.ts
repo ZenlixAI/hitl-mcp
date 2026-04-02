@@ -7,6 +7,7 @@ import { requestIdMiddleware } from '../http/middleware/request-id';
 import { questionRoutes } from '../http/routes/questions';
 import { questionGroupRoutes } from '../http/routes/question-groups';
 import { ok } from '../http/response';
+import { injectCallerScopeIntoMcpState } from '../mcp/caller-scope';
 import { registerHitlTools } from '../mcp/register-tools';
 import { Logger } from '../observability/logger';
 import { HitlMetrics } from '../observability/metrics';
@@ -67,6 +68,12 @@ export async function createRuntime() {
       }
     ]
   });
+  server.use('mcp:tools/call', async (ctx, next) => {
+    injectCallerScopeIntoMcpState(ctx, {
+      sessionHeader: config.agentIdentity.sessionHeader
+    });
+    return next();
+  });
   registerHitlTools(server, service);
   const app = server.app;
 
@@ -88,6 +95,14 @@ export async function createRuntime() {
 
   const apiKey = config.security.apiKey;
   if (apiKey) {
+    app.use('/mcp*', apiKeyAuth(apiKey));
+    app.use(
+      '/mcp*',
+      requestContextMiddleware({
+        sessionHeader: config.agentIdentity.sessionHeader,
+        resolveAgentIdentity: (c) => c.get('agentIdentity') ?? resolveApiKeyPrincipal(c, apiKey)
+      })
+    );
     app.use(`${config.http.apiPrefix}/question-groups/*`, apiKeyAuth(apiKey));
     app.use(`${config.http.apiPrefix}/questions/*`, apiKeyAuth(apiKey));
     app.use(

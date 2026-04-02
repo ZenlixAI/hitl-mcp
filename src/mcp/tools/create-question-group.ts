@@ -1,13 +1,7 @@
 import { object, error, type MCPServer } from 'mcp-use/server';
 import { createQuestionGroupInputSchema } from '../../domain/schemas';
 import type { HitlService } from '../../core/hitl-service';
-
-function readCaller(ctx: any) {
-  return {
-    agent_identity: String(ctx?.state?.get?.('agentIdentity') ?? ''),
-    agent_session_id: String(ctx?.state?.get?.('agentSessionId') ?? '')
-  };
-}
+import { readCallerScopeFromMcpContext } from '../caller-scope';
 
 export function registerCreateQuestionGroupTool(server: MCPServer, service: HitlService) {
   server.tool(
@@ -19,7 +13,12 @@ export function registerCreateQuestionGroupTool(server: MCPServer, service: Hitl
     },
     async (input, ctx) => {
       try {
-        return object(await service.createQuestionGroup({ caller: readCaller(ctx), input }));
+        return object(
+          await service.createQuestionGroup({
+            caller: readCallerScopeFromMcpContext(ctx),
+            input
+          })
+        );
       } catch (err) {
         return error(err instanceof Error ? err.message : 'failed to create question group');
       }
