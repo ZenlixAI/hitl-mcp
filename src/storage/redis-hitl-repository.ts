@@ -19,6 +19,15 @@ export class RedisHitlRepository implements HitlRepository {
     private readonly ttlSeconds: number
   ) {}
 
+  async isReady(): Promise<boolean> {
+    try {
+      const pong = await this.redis.ping();
+      return pong === 'PONG';
+    } catch {
+      return false;
+    }
+  }
+
   async createPendingGroup(input: any): Promise<void> {
     const now = new Date().toISOString();
     const group: GroupRecord = {

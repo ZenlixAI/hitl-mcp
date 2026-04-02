@@ -1,29 +1,33 @@
 import { Hono } from 'hono';
+import { loadConfig } from '../config/load-config';
 import { HitlService } from '../core/hitl-service';
 import { apiKeyAuth } from '../http/middleware/auth';
 import { requestIdMiddleware } from '../http/middleware/request-id';
 import { questionRoutes } from '../http/routes/questions';
 import { questionGroupRoutes } from '../http/routes/question-groups';
 import { ok } from '../http/response';
+import { Logger } from '../observability/logger';
+import { HitlMetrics } from '../observability/metrics';
 import type { HitlRepository } from '../storage/hitl-repository';
 import { InMemoryHitlRepository } from '../storage/in-memory-repository';
 import { createRedisClient } from '../storage/redis-client';
 import { RedisHitlRepository } from '../storage/redis-hitl-repository';
 import { Waiter } from '../state/waiter';
 
-async function resolveRepository(): Promise<HitlRepository> {
-  const useRedis = process.env.HITL_STORAGE === 'redis';
-  if (!useRedis) return new InMemoryHitlRepository();
+async function resolveRepository(params: {
+  storageKind: 'memory' | 'redis';
+  redisUrl: string;
+  redisPrefix: string;
+  ttlSeconds: number;
+}): Promise<HitlRepository> {
+  if (params.storageKind !== 'redis') return new InMemoryHitlRepository();
 
-  const redisUrl = process.env.HITL_REDIS_URL || 'redis://127.0.0.1:6379';
-  const prefix = process.env.HITL_REDIS_PREFIX || 'hitl';
-  const ttlSeconds = Number(process.env.HITL_TTL_SECONDS || '604800');
-  const redis = createRedisClient(redisUrl);
+  const redis = createRedisClient(params.redisUrl);
 
   try {
     await redis.connect();
     await redis.ping();
-    return new RedisHitlRepository(redis, prefix, ttlSeconds);
+    return new RedisHitlRepository(redis, params.redisPrefix, params.ttlSeconds);
   } catch {
     try {
       await redis.quit();
@@ -35,26 +39,65 @@ async function resolveRepository(): Promise<HitlRepository> {
 }
 
 export async function createRuntime() {
+  const config = await loadConfig();
   const app = new Hono();
-  const repository = await resolveRepository();
+  const logger = new Logger(config.observability.logLevel);
+  const metrics = new HitlMetrics();
+  const repository = await resolveRepository({
+    storageKind: config.storage.kind,
+    redisUrl: config.redis.url,
+    redisPrefix: config.redis.keyPrefix,
+    ttlSeconds: config.ttl.defaultSeconds
+  });
   const waiter = new Waiter();
-  const service = new HitlService(repository, waiter, 0);
+  const service = new HitlService(repository, waiter, config.pending.maxWaitSeconds, metrics);
 
   app.use('*', requestIdMiddleware);
-  const apiKey = process.env.HITL_API_KEY;
+  app.use('*', async (c, next) => {
+    const startedAt = Date.now();
+    await next();
+    const requestId = c.get('requestId') ?? 'local';
+    const traceId = c.get('traceId') ?? requestId;
+    logger.info('http_request', {
+      method: c.req.method,
+      path: c.req.path,
+      status: c.res.status,
+      duration_ms: Date.now() - startedAt,
+      request_id: requestId,
+      trace_id: traceId
+    });
+  });
+
+  const apiKey = config.security.apiKey;
   if (apiKey) {
-    app.use('/api/v1/question-groups/*', apiKeyAuth(apiKey));
-    app.use('/api/v1/questions/*', apiKeyAuth(apiKey));
+    app.use(`${config.http.apiPrefix}/question-groups/*`, apiKeyAuth(apiKey));
+    app.use(`${config.http.apiPrefix}/questions/*`, apiKeyAuth(apiKey));
   }
 
-  app.get('/api/v1/healthz', (c) => {
+  app.get(`${config.http.apiPrefix}/healthz`, (c) => {
     return c.json(ok(c.get('requestId') ?? 'local', { status: 'ok' }));
   });
 
-  app.route('/api/v1', questionGroupRoutes({ repository, waiter }));
-  app.route('/api/v1', questionRoutes({ repository }));
+  app.get(`${config.http.apiPrefix}/readyz`, async (c) => {
+    const ready = (await repository.isReady?.()) ?? true;
+    if (!ready) {
+      return c.json(
+        ok(c.get('requestId') ?? 'local', { status: 'not_ready' }),
+        503
+      );
+    }
 
-  return { app, repository, waiter, service };
+    return c.json(ok(c.get('requestId') ?? 'local', { status: 'ready' }));
+  });
+
+  app.get(`${config.http.apiPrefix}/metrics`, (c) => {
+    return c.json(ok(c.get('requestId') ?? 'local', metrics.snapshot()));
+  });
+
+  app.route(config.http.apiPrefix, questionGroupRoutes({ repository, waiter, metrics }));
+  app.route(config.http.apiPrefix, questionRoutes({ repository }));
+
+  return { app, repository, waiter, service, config, metrics };
 }
 
 export async function createHttpApp() {

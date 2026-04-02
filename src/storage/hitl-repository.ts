@@ -5,6 +5,7 @@ export interface FinalizeResult {
 }
 
 export interface HitlRepository {
+  isReady?(): Promise<boolean>;
   createPendingGroup(input: unknown): Promise<void>;
   getGroup(groupId: string): Promise<Record<string, unknown> | null>;
   getQuestion(questionId: string): Promise<Record<string, unknown> | null>;

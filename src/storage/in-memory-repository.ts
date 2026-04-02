@@ -14,6 +14,10 @@ export class InMemoryHitlRepository implements HitlRepository {
   private groups = new Map<string, GroupRecord>();
   private finalizeIdempotency = new Map<string, FinalizeResult>();
 
+  async isReady(): Promise<boolean> {
+    return true;
+  }
+
   async createPendingGroup(input: any): Promise<void> {
     const now = new Date().toISOString();
     this.groups.set(input.question_group_id, {

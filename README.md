@@ -127,6 +127,16 @@ Environment variables:
 - `HITL_REDIS_PREFIX` (default `hitl`)
 - `HITL_TTL_SECONDS` (default `604800`)
 - `HITL_API_KEY` (when set, HTTP protected routes require `x-api-key`)
+- `HITL_SERVER_NAME` (optional, server name override)
+- `HITL_SERVER_VERSION` (optional, server version override)
+- `HITL_HTTP_HOST` (optional, HTTP bind host)
+- `HITL_HTTP_API_PREFIX` (optional, default `/api/v1`)
+- `HITL_ANSWERED_RETENTION_SECONDS` (optional)
+- `HITL_LOG_LEVEL` (`debug|info|warn|error`)
+- `HITL_ENABLE_METRICS` (`true|false`)
+
+Configuration precedence:
+- `env` > `.env` > `config/hitl-mcp.yaml` > defaults
 
 ## Usage Examples
 
@@ -262,6 +272,26 @@ Purpose:
 Success:
 - `200` with `data.status = "ok"`.
 
+### `GET /readyz`
+
+Purpose:
+- Readiness probe for deployment systems.
+
+Behavior:
+- `200` with `status=ready` when backend storage is usable.
+- `503` with `status=not_ready` when backend is not ready.
+
+### `GET /metrics`
+
+Purpose:
+- Operational metrics endpoint.
+
+Response includes:
+- `counters.finalize_validation_failed_total`
+- `counters.finalize_success_total`
+- `gauges.pending_count`
+- `histograms.wait_duration_ms` (count/min/max/avg)
+
 ### `GET /question-groups/{question_group_id}`
 
 Purpose:
@@ -356,6 +386,16 @@ npm run test
 ```
 
 Current test suite covers unit and integration scenarios, including pending-to-answered flow and idempotency.
+
+## Operations and Deployment
+
+Docker assets:
+- `Dockerfile`
+- `.dockerignore`
+- `docker-compose.yml` (includes Redis + app service)
+
+Runbook:
+- `docs/runbooks/production.md`
 
 ## Project Status
 

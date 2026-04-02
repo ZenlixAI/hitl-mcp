@@ -17,4 +17,8 @@ export class Waiter {
     const waiter = this.waiters.get(groupId);
     if (waiter) waiter(payload);
   }
+
+  size() {
+    return this.waiters.size;
+  }
 }

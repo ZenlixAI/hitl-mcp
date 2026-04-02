@@ -1,12 +1,14 @@
 import { Hono } from 'hono';
 import { fail, ok } from '../response';
 import { validateAnswerSet } from '../../domain/validators';
+import type { HitlMetrics } from '../../observability/metrics';
 import type { HitlRepository } from '../../storage/hitl-repository';
 import type { Waiter } from '../../state/waiter';
 
 export function questionGroupRoutes(deps: {
   repository: HitlRepository;
   waiter: Waiter;
+  metrics?: HitlMetrics;
 }) {
   const app = new Hono();
 
@@ -43,6 +45,7 @@ export function questionGroupRoutes(deps: {
     );
 
     if (!validation.ok) {
+      deps.metrics?.incFinalizeValidationFailed();
       return c.json(
         fail(
           requestId,
@@ -56,6 +59,7 @@ export function questionGroupRoutes(deps: {
     }
 
     const saved = await deps.repository.finalizeAnswers(groupId, body.answers ?? {}, body.idempotency_key);
+    deps.metrics?.incFinalizeSuccess();
 
     deps.waiter.notify(groupId, {
       question_group_id: groupId,
