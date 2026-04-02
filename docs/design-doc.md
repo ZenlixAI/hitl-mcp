@@ -1,5 +1,7 @@
 # hitl-mcp 产品技术设计文档
 
+> 注意：该文档描述的是 2026-04-01 的早期阻塞式 `hitl_ask_question_group` 方案。当前实现已经切换为服务端生成 `question_group_id`、连接认证识别 `agent_identity`、连接 header 识别 `agent_session_id`、以及 `create / wait / get_current` 工具模型。阅读当前行为请以 [README.md](/var/folders/g4/bhx1x1vn0wld0v_hx35m109w0000gn/T/vibe-kanban/worktrees/b602-/hitl-mcp/README.md) 与 [docs/api/mcp-tools.md](/var/folders/g4/bhx1x1vn0wld0v_hx35m109w0000gn/T/vibe-kanban/worktrees/b602-/hitl-mcp/docs/api/mcp-tools.md) 为准。
+
 ## 1. 文档信息
 - 项目：`hitl-mcp`
 - 文档版本：`v0.1`
@@ -421,4 +423,3 @@
 - Agent 会话在未收最终答案前保持 pending；
 - 提供生产级可运维的 HTTP 管控面；
 - 使用 Redis 实现跨 session 持久化、幂等与扩展能力。
-

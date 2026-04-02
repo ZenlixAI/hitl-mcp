@@ -8,14 +8,15 @@ describe('repository selection', () => {
     try {
       const runtime = await createRuntime();
 
-      await runtime.repository.createPendingGroup({
-        question_group_id: 'qg_sel_1',
+      const created = await runtime.repository.createPendingGroup({
+        agent_identity: 'api_key:test',
+        agent_session_id: 'session-test',
         title: 'group',
         questions: [{ question_id: 'q_sel_1', type: 'text', title: 'why' }]
       });
 
-      const group = await runtime.repository.getGroup('qg_sel_1');
-      expect(group?.question_group_id).toBe('qg_sel_1');
+      const group = await runtime.repository.getGroup(created.question_group_id);
+      expect(group?.question_group_id).toBe(created.question_group_id);
     } finally {
       delete process.env.HITL_STORAGE;
       delete process.env.HITL_REDIS_URL;

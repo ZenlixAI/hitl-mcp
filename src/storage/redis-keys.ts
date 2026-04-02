@@ -5,5 +5,9 @@ export const redisKeys = {
   wait: (prefix: string, groupId: string) => `${prefix}:wait:${groupId}`,
   idem: (prefix: string, scope: string, idempotencyKey: string) =>
     `${prefix}:idem:${scope}:${idempotencyKey}`,
-  idxQ2G: (prefix: string, questionId: string) => `${prefix}:idx:q2g:${questionId}`
+  idxQ2G: (prefix: string, questionId: string) => `${prefix}:idx:q2g:${questionId}`,
+  pendingScope: (prefix: string, agentIdentity: string, agentSessionId: string) =>
+    `${prefix}:idx:pending:${agentIdentity}:${agentSessionId}`,
+  createIdem: (prefix: string, agentIdentity: string, agentSessionId: string, idempotencyKey: string) =>
+    `${prefix}:idx:create-idem:${agentIdentity}:${agentSessionId}:${idempotencyKey}`
 };

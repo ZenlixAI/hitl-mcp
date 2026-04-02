@@ -1,11 +1,14 @@
-import { Hono } from 'hono';
+import { MCPServer } from 'mcp-use/server';
 import { loadConfig } from '../config/load-config';
 import { HitlService } from '../core/hitl-service';
-import { apiKeyAuth } from '../http/middleware/auth';
+import { apiKeyAuth, resolveApiKeyPrincipal } from '../http/middleware/auth';
+import { requestContextMiddleware } from '../http/middleware/request-context';
 import { requestIdMiddleware } from '../http/middleware/request-id';
 import { questionRoutes } from '../http/routes/questions';
 import { questionGroupRoutes } from '../http/routes/question-groups';
 import { ok } from '../http/response';
+import { injectCallerScopeIntoMcpState } from '../mcp/caller-scope';
+import { registerHitlTools } from '../mcp/register-tools';
 import { Logger } from '../observability/logger';
 import { HitlMetrics } from '../observability/metrics';
 import type { HitlRepository } from '../storage/hitl-repository';
@@ -40,7 +43,6 @@ async function resolveRepository(params: {
 
 export async function createRuntime() {
   const config = await loadConfig();
-  const app = new Hono();
   const logger = new Logger(config.observability.logLevel);
   const metrics = new HitlMetrics();
   const repository = await resolveRepository({
@@ -51,6 +53,29 @@ export async function createRuntime() {
   });
   const waiter = new Waiter();
   const service = new HitlService(repository, waiter, config.pending.maxWaitSeconds, metrics);
+  const server = new MCPServer({
+    name: config.server.name,
+    title: 'HITL MCP',
+    version: config.server.version,
+    description: 'Human-in-the-loop MCP server with HTTP control plane.',
+    baseUrl: config.server.baseUrl,
+    favicon: 'favicon.ico',
+    icons: [
+      {
+        src: 'icon.svg',
+        mimeType: 'image/svg+xml',
+        sizes: ['512x512']
+      }
+    ]
+  });
+  server.use('mcp:tools/call', async (ctx, next) => {
+    injectCallerScopeIntoMcpState(ctx, {
+      sessionHeader: config.agentIdentity.sessionHeader
+    });
+    return next();
+  });
+  registerHitlTools(server, service);
+  const app = server.app;
 
   app.use('*', requestIdMiddleware);
   app.use('*', async (c, next) => {
@@ -70,8 +95,23 @@ export async function createRuntime() {
 
   const apiKey = config.security.apiKey;
   if (apiKey) {
+    app.use('/mcp*', apiKeyAuth(apiKey));
+    app.use(
+      '/mcp*',
+      requestContextMiddleware({
+        sessionHeader: config.agentIdentity.sessionHeader,
+        resolveAgentIdentity: (c) => c.get('agentIdentity') ?? resolveApiKeyPrincipal(c, apiKey)
+      })
+    );
     app.use(`${config.http.apiPrefix}/question-groups/*`, apiKeyAuth(apiKey));
     app.use(`${config.http.apiPrefix}/questions/*`, apiKeyAuth(apiKey));
+    app.use(
+      `${config.http.apiPrefix}/question-groups/current`,
+      requestContextMiddleware({
+        sessionHeader: config.agentIdentity.sessionHeader,
+        resolveAgentIdentity: (c) => resolveApiKeyPrincipal(c, apiKey)
+      })
+    );
   }
 
   app.get(`${config.http.apiPrefix}/healthz`, (c) => {
@@ -97,7 +137,7 @@ export async function createRuntime() {
   app.route(config.http.apiPrefix, questionGroupRoutes({ repository, waiter, metrics }));
   app.route(config.http.apiPrefix, questionRoutes({ repository }));
 
-  return { app, repository, waiter, service, config, metrics };
+  return { app, server, repository, waiter, service, config, metrics };
 }
 
 export async function createHttpApp() {

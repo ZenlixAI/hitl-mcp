@@ -12,6 +12,22 @@ export function questionGroupRoutes(deps: {
 }) {
   const app = new Hono();
 
+  app.get('/question-groups/current', async (c) => {
+    const requestId = c.get('requestId') ?? 'local';
+    const agentIdentity = c.get('agentIdentity');
+    const agentSessionId = c.get('agentSessionId');
+    const group = await deps.repository.getPendingGroupByScope(agentIdentity, agentSessionId);
+
+    if (!group) {
+      return c.json(
+        fail(requestId, 'PENDING_GROUP_NOT_FOUND', 'no pending group for current caller scope'),
+        404
+      );
+    }
+
+    return c.json(ok(requestId, group));
+  });
+
   app.get('/question-groups/:questionGroupId', async (c) => {
     const requestId = c.get('requestId') ?? 'local';
     const group = await deps.repository.getGroup(c.req.param('questionGroupId'));

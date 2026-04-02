@@ -38,21 +38,27 @@
 在复杂 Agent 工作流中，直接用 assistant 文本提问存在天然问题：
 
 1. 缺少结构化输出，前端难以稳定渲染问题卡片。
-2. 缺少稳定 `question_group_id` / `question_id`，状态难维护。
+2. 缺少稳定的问题组与问题生命周期跟踪。
 3. 不利于“用户回答 -> 服务端后处理 -> 最终确认”的工程链路。
 
-同时，CLI/TUI 优先的方案对 Web 集成不够友好：
+传统的阻塞式单工具 HITL 方案对 Agent 平台也不够友好：
 
-1. UI 与 MCP 服务耦合。
-2. 缺少清晰的 HTTP 管控面。
-3. 难以做全局持久化与跨会话恢复。
+1. Agent 自己持有本应由服务端拥有的标识符。
+2. 重连、重试、多 Session 下的作用域不清晰。
+3. client 难以在用户真正回答前稳定感知 `pending` 问题组。
 
-`hitl-mcp` 的目标是提供协议清晰、后端可控、可持久化的 HITL 基础设施。
+`hitl-mcp` 用服务端拥有的身份和生命周期模型解决这些问题：
+
+1. `agent_identity` 由 MCP 连接认证推导。
+2. `agent_session_id` 由稳定的连接级 header 推导，默认 `x-agent-session-id`。
+3. `question_group_id` 永远由服务端生成。
+4. 对同一个 `(agent_identity, agent_session_id)`，同时最多只有一个 `pending` 问题组。
 
 ## 项目目标
 
 - 永远以 **Question Group** 发问，不支持裸问题。
-- MCP 调用在 finalize 前保持 **pending**。
+- 让问题组主键和生命周期归服务端所有。
+- 让 Agent 平台在用户最终回答前就能观察到 `pending` 问题组。
 - 支持题型：
   - `single_choice`
   - `multi_choice`
@@ -61,21 +67,23 @@
   - `range`
 - 支持必答（默认）与可选。
 - group/question 均支持 `tags` 与 `extra`。
-- HTTP API 采用“按 ID 操作”模型，不提供 list。
+- HTTP API 采用“按 ID 操作”模型。
 - 使用 KV（Redis）做持久化与 TTL。
 
 ## 用户视角
 
 ### 开发者（Agent 开发）
 
-通过 MCP 工具完成提问与等待：
+通过 MCP 工具完成创建、等待与查询：
 
-- `hitl_ask_question_group`
+- `hitl_create_question_group`
+- `hitl_wait_question_group`
+- `hitl_get_current_question_group`
 - `hitl_get_question_group_status`
 - `hitl_get_question`
 - `hitl_cancel_question_group`
 
-你的 Agent 不需要自己实现等待队列或轮询协议。
+你的 Agent 不需要自己生成问题组 ID，也不需要发明额外的 pending 协议。
 
 ### 开发者（后端服务）
 
@@ -84,6 +92,7 @@
 - `PUT /api/v1/question-groups/{id}/answers/finalize`
 - `POST /api/v1/question-groups/{id}/cancel`
 - `POST /api/v1/question-groups/{id}/expire`
+- `GET /api/v1/question-groups/current`
 - `GET /api/v1/question-groups/{id}`
 - `GET /api/v1/questions/{id}`
 
@@ -91,54 +100,66 @@
 
 ## 端到端流程
 
-1. Agent 调用 `hitl_ask_question_group` 发出结构化问题组。
-2. `hitl-mcp` 落库并置为 `pending`，该 MCP 调用挂起。
-3. 客户端基于 question IDs 渲染 UI。
-4. 用户在客户端完成回答。
-5. 你的后端对回答做业务后处理。
-6. 后端调用 `answers/finalize` 提交最终答案。
-7. `hitl-mcp` 校验：
+1. Agent 调用 `hitl_create_question_group` 发出结构化问题组。
+2. 服务端认证调用方，读取 `x-agent-session-id`，生成 `question_group_id`，并落为 `pending`。
+3. client 或后端立即拿到返回的 `question_group_id`，可以感知和展示 pending 状态。
+4. 当需要阻塞等待时，Agent 调用 `hitl_wait_question_group`。
+5. 用户在客户端完成回答。
+6. 你的后端对回答做业务后处理。
+7. 后端调用 `answers/finalize` 提交最终答案。
+8. `hitl-mcp` 校验：
    - 不合法：返回 `422 ANSWER_VALIDATION_FAILED`，状态保持 `pending`
-   - 合法：状态切为 `answered`，唤醒阻塞 MCP 调用
-8. Agent 拿到最终答案并继续执行。
+   - 合法：状态切为 `answered`，唤醒阻塞的 MCP wait 调用
+9. Agent 拿到最终答案并继续执行。
 
 ## 关键设计决策
 
-### 1) 阻塞式 Ask Tool
+### 1) 服务端生成 Question Group ID
 
-`hitl_ask_question_group` 采用阻塞等待，确保“没有 finalize 就不继续”。
+`question_group_id` 不允许由 Agent 提供，确保对象主键和生命周期权限归服务端所有。
 
-### 2) Question Group First
+### 2) 稳定的调用方作用域
 
-统一以问题组管理生命周期，便于前端状态同步和后端治理。
+调用方作用域由可信的连接上下文决定：
 
-### 3) 无 List 的 HTTP 管控面
+- `agent_identity` 来自连接认证
+- `agent_session_id` 来自稳定的连接级 header
 
-所有读写必须带 `question_group_id` 或 `question_id`，减少歧义与误用。
+不再依赖 tool input 中的 session metadata。
 
-### 4) MCP 面 + HTTP 面职责分离
+### 3) 拆分 Create 与 Wait
 
-- MCP 面：模型交互语义（提问/等待）。
-- HTTP 面：服务端控制语义（确认/取消/过期）。
+MCP 工具面被明确拆成：
+
+- `create`：创建 `pending` 问题组并立即返回
+- `wait`：仅在 Agent 需要阻塞语义时才等待
+- `get_current`：用于按调用方作用域恢复当前 pending 状态
+
+### 4) 每个调用方作用域只允许一个 Pending
+
+对同一个 `(agent_identity, agent_session_id)`，同时最多存在一个 `pending` 问题组。
+
+这让 client 侧 pending 状态保持确定性。
 
 ### 5) 校验与幂等
 
-finalize 支持类型/范围校验与必答校验；支持 `idempotency_key`。
+finalize 支持类型/范围校验与必答校验；create/finalize 都可通过 `idempotency_key` 实现幂等。
 
 ### 6) 存储策略
 
 - 内存仓储：本地开发。
 - Redis 仓储：持久化与 TTL。
-- Redis 不可用时可自动回退内存仓储（可配置场景）。
+- 为调用方作用域查找和 create 幂等维护额外索引。
 
 ## 当前能力
 
 - 问题与答案 schema、校验器。
-- MCP 工具：ask/status/get/cancel。
-- HTTP API：health、query、finalize、cancel、expire。
+- MCP 工具：create/wait/current/status/get/cancel。
+- HTTP API：health、ready、metrics、query、current、finalize、cancel、expire。
 - 状态机：`pending -> answered|cancelled|expired`。
-- 阻塞等待与唤醒机制。
+- 显式等待与唤醒机制。
 - HTTP API key 鉴权（开启后要求 `x-api-key`）。
+- 已认证调用方身份与 session header 的 request context 提取。
 - Redis 仓储实现与测试。
 
 ## 快速开始
@@ -180,7 +201,10 @@ npm run test
 - `HITL_REDIS_URL`：Redis 地址（默认 `redis://127.0.0.1:6379`）
 - `HITL_REDIS_PREFIX`：Redis key 前缀（默认 `hitl`）
 - `HITL_TTL_SECONDS`：TTL（默认 `604800`）
-- `HITL_API_KEY`：开启后 HTTP 受保护路由需要 `x-api-key`
+- `HITL_API_KEY`：开启后受保护 HTTP 路由需要 `x-api-key`
+- `HITL_AGENT_AUTH_MODE`：`api_key` 或 `bearer`
+- `HITL_AGENT_SESSION_HEADER`：默认 `x-agent-session-id`
+- `HITL_CREATE_CONFLICT_POLICY`：`error` 或 `reuse_pending`
 - `HITL_SERVER_NAME`：可选，Server 名称覆盖
 - `HITL_SERVER_VERSION`：可选，Server 版本覆盖
 - `HITL_HTTP_HOST`：可选，HTTP 绑定地址
@@ -195,13 +219,12 @@ npm run test
 
 ## 使用示例
 
-### Agent 调用 MCP 提问
+### Agent 调用 MCP 创建问题组
 
-工具：`hitl_ask_question_group`
+工具：`hitl_create_question_group`
 
 ```json
 {
-  "question_group_id": "qg_release_001",
   "title": "发布决策",
   "questions": [
     {
@@ -217,10 +240,18 @@ npm run test
 }
 ```
 
+### Agent 等待当前 Pending 问题组
+
+工具：`hitl_wait_question_group`
+
+```json
+{}
+```
+
 ### 服务端 finalize
 
 ```bash
-curl -X PUT "http://localhost:3000/api/v1/question-groups/qg_release_001/answers/finalize" \
+curl -X PUT "http://localhost:3000/api/v1/question-groups/<question_group_id>/answers/finalize" \
   -H "Content-Type: application/json" \
   -H "x-api-key: ${HITL_API_KEY}" \
   -d '{
@@ -234,15 +265,14 @@ curl -X PUT "http://localhost:3000/api/v1/question-groups/qg_release_001/answers
 
 ## MCP 工具说明
 
-### `hitl_ask_question_group`
+### `hitl_create_question_group`
 
 用途：
 
-- 创建问题组，并阻塞等待直到进入终态（`answered`、`cancelled`、`expired`）。
+- 为当前认证调用方作用域创建一个 `pending` 问题组，并立即返回。
 
 输入（关键字段）：
 
-- `question_group_id`（string，必填）
 - `title`（string，必填）
 - `description`（string，可选，支持 markdown）
 - `tags`（string[]，可选）
@@ -250,15 +280,33 @@ curl -X PUT "http://localhost:3000/api/v1/question-groups/qg_release_001/answers
 - `ttl_seconds`（number，可选）
 - `questions`（array，必填）
 - `idempotency_key`（string，可选）
-- `metadata.agent_session_id` / `metadata.agent_trace_id`（可选）
 
-题型支持：
+调用方作用域：
 
-- `single_choice`（含 `options[]`）
-- `multi_choice`（含 `options[]`）
-- `text`（可选 `text_constraints`）
-- `boolean`
-- `range`（含 `range_constraints`）
+- `agent_identity` 由认证推导
+- `agent_session_id` 由配置的 session header 推导
+
+输出：
+
+- 服务端生成的 `question_group_id`
+- `status: "pending"`
+- 调用方作用域字段
+- 时间戳与问题组载荷
+
+### `hitl_wait_question_group`
+
+用途：
+
+- 等待问题组进入终态（`answered`、`cancelled`、`expired`）。
+
+输入：
+
+- `question_group_id`（string，可选）
+
+行为：
+
+- 传 `question_group_id` 时，等待指定问题组。
+- 不传时，等待当前调用方作用域下唯一的 pending 问题组。
 
 输出：
 
@@ -270,6 +318,17 @@ curl -X PUT "http://localhost:3000/api/v1/question-groups/qg_release_001/answers
 
 - 该工具是阻塞式设计。
 - 当 `HITL_PENDING_MAX_WAIT_SECONDS=0` 时，为无限等待。
+
+### `hitl_get_current_question_group`
+
+用途：
+
+- 返回当前调用方作用域下的 pending 问题组。
+
+输出：
+
+- 存在时返回完整 pending 问题组对象。
+- 不存在时返回 `PENDING_GROUP_NOT_FOUND`。
 
 ### `hitl_get_question_group_status`
 
@@ -305,7 +364,7 @@ curl -X PUT "http://localhost:3000/api/v1/question-groups/qg_release_001/answers
 
 用途：
 
-- 取消 pending 问题组，并唤醒阻塞中的 ask 调用。
+- 取消 pending 问题组，并唤醒阻塞中的 wait 调用。
 
 输入：
 
@@ -368,6 +427,23 @@ curl -X PUT "http://localhost:3000/api/v1/question-groups/qg_release_001/answers
 - `gauges.pending_count`
 - `histograms.wait_duration_ms`（count/min/max/avg）
 
+### `GET /question-groups/current`
+
+用途：
+
+- 按已认证调用方作用域查询当前 pending 问题组。
+
+请求头：
+
+- 开启 API key 时需要 `x-api-key`
+- 配置的 session header，默认 `x-agent-session-id`
+
+错误：
+
+- `401 UNAUTHORIZED`
+- `400 AGENT_SESSION_ID_REQUIRED`
+- `404 PENDING_GROUP_NOT_FOUND`
+
 ### `GET /question-groups/{question_group_id}`
 
 用途：
@@ -411,7 +487,7 @@ curl -X PUT "http://localhost:3000/api/v1/question-groups/qg_release_001/answers
 
 - 进行类型/范围/必答校验。
 - 若不合法：保持 `pending`。
-- 若合法：切换到 `answered` 并唤醒阻塞的 MCP ask 调用。
+- 若合法：切换到 `answered` 并唤醒阻塞的 MCP wait 调用。
 
 成功：
 
@@ -434,7 +510,7 @@ curl -X PUT "http://localhost:3000/api/v1/question-groups/qg_release_001/answers
 行为：
 
 - 状态置为 `cancelled`。
-- 唤醒阻塞中的 MCP ask 调用（终态返回）。
+- 唤醒阻塞中的 MCP wait 调用（终态返回）。
 
 ### `POST /question-groups/{question_group_id}/expire`
 
@@ -445,7 +521,7 @@ curl -X PUT "http://localhost:3000/api/v1/question-groups/qg_release_001/answers
 行为：
 
 - 状态置为 `expired`。
-- 唤醒阻塞中的 MCP ask 调用（终态返回）。
+- 唤醒阻塞中的 MCP wait 调用（终态返回）。
 
 ### 鉴权
 
@@ -458,6 +534,9 @@ curl -X PUT "http://localhost:3000/api/v1/question-groups/qg_release_001/answers
 
 - `QUESTION_GROUP_NOT_FOUND`（`404`）
 - `QUESTION_NOT_FOUND`（`404`）
+- `PENDING_GROUP_NOT_FOUND`（`404`）
+- `AGENT_IDENTITY_REQUIRED`（`401`）
+- `AGENT_SESSION_ID_REQUIRED`（`400`）
 - `ANSWER_VALIDATION_FAILED`（`422`）
 - `UNAUTHORIZED`（`401`）
 
@@ -481,11 +560,20 @@ hitl-mcp/
 - MCP 工具契约：[docs/api/mcp-tools.md](docs/api/mcp-tools.md)
 - HTTP API 契约：[docs/api/http-openapi.md](docs/api/http-openapi.md)
 - 产品技术设计：[docs/design-doc.md](docs/design-doc.md)
+- 重构实施计划：[docs/superpowers/plans/2026-04-02-hitl-agent-identity-session-refactor.md](docs/superpowers/plans/2026-04-02-hitl-agent-identity-session-refactor.md)
 - 生产运维手册：[docs/runbooks/production.md](docs/runbooks/production.md)
 
 ## 开发与测试
 
-当前测试覆盖了单元与集成场景，包括 pending->answered 闭环与 finalize 幂等。
+当前测试覆盖了单元与集成场景，包括作用域 pending 行为、pending->answered 闭环与幂等。
+
+## 运维与部署
+
+Docker 相关文件：
+
+- `Dockerfile`
+- `.dockerignore`
+- `docker-compose.yml`（包含 Redis + app service）
 
 ## 运维与部署
 
@@ -497,7 +585,7 @@ Docker 相关文件：
 
 ## 项目状态
 
-当前仓库已具备 HITL 主链路和主要集成面。面向大规模生产部署时，仍可继续增强（例如更完整的认证方式、指标导出与运维手册）。
+当前仓库已具备基于新 identity/session 作用域模型的 HITL 主链路和主要集成面。面向大规模生产部署时，仍可继续增强（例如更完整的认证方式、指标导出与运维手册）。
 
 ## 许可证
 
