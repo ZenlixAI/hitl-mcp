@@ -36,6 +36,11 @@
       "sourceType": "github",
       "computedHash": "865d12e9e498530d7c667a4d263ea76e315cec5c9bc37b5f57735751df934fc3"
     },
+    "skill-creator": {
+      "source": "anthropics/skills",
+      "sourceType": "github",
+      "computedHash": "b122f4d1e91aa1d83027e050b5b37c3156203ee85458d7b1360bc48167c9e02a"
+    },
     "subagent-driven-development": {
       "source": "obra/superpowers",
       "sourceType": "github",
