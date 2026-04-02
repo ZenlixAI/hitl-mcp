@@ -1,6 +1,6 @@
 ---
 name: hitl
-description: Use when any human question is needed in an agent workflow, especially when a structured question group, stable IDs, or blocking wait for final answers are required.
+description: Use whenever an agent needs to ask a human any question; this skill is mandatory for all human-facing questions.
 ---
 
 # hitl
