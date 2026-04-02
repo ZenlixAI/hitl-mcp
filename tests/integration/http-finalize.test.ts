@@ -19,8 +19,9 @@ describe('http finalize api', () => {
 describe('http finalize validation', () => {
   it('returns 422 when answers are invalid and keeps pending', async () => {
     const runtime = await createRuntime();
-    await runtime.repository.createPendingGroup({
-      question_group_id: 'qg_invalid_1',
+    const created = await runtime.repository.createPendingGroup({
+      agent_identity: 'api_key:test-agent',
+      agent_session_id: 'session-invalid-1',
       title: 'group',
       questions: [
         {
@@ -32,7 +33,7 @@ describe('http finalize validation', () => {
       ]
     });
 
-    const res = await runtime.app.request('/api/v1/question-groups/qg_invalid_1/answers/finalize', {
+    const res = await runtime.app.request(`/api/v1/question-groups/${created.question_group_id}/answers/finalize`, {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ answers: { q_range_1: { value: 99 } } })
@@ -42,7 +43,7 @@ describe('http finalize validation', () => {
     const body = await res.json();
     expect(body.error.code).toBe('ANSWER_VALIDATION_FAILED');
 
-    const status = await runtime.repository.getGroupStatus('qg_invalid_1');
+    const status = await runtime.repository.getGroupStatus(created.question_group_id);
     expect(status?.status).toBe('pending');
   });
 });

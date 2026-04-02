@@ -79,6 +79,24 @@ export const askQuestionGroupInputSchema = z.object({
     .optional()
 });
 
+export const createQuestionGroupInputSchema = z
+  .object({
+    title: z.string().min(1),
+    description: z.string().optional(),
+    tags: z.array(z.string()).optional(),
+    extra: z.record(z.string(), z.any()).optional(),
+    ttl_seconds: z.number().int().positive().optional(),
+    questions: z.array(questionSchema).min(1),
+    idempotency_key: z.string().optional()
+  })
+  .strict();
+
+export const waitQuestionGroupInputSchema = z
+  .object({
+    question_group_id: z.string().min(1).optional()
+  })
+  .strict();
+
 export const finalizeAnswersSchema = z.object({
   idempotency_key: z.string().optional(),
   answers: z.record(z.string(), z.object({ value: z.any() })),

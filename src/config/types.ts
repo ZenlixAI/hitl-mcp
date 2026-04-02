@@ -28,6 +28,11 @@ export const appConfigSchema = z.object({
   security: z.object({
     apiKey: z.string().min(1).optional()
   }),
+  agentIdentity: z.object({
+    authMode: z.enum(['api_key', 'bearer']),
+    sessionHeader: z.string().min(1),
+    createConflictPolicy: z.enum(['error', 'reuse_pending'])
+  }),
   observability: z.object({
     logLevel: z.enum(['debug', 'info', 'warn', 'error']),
     enableMetrics: z.boolean()

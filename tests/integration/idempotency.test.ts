@@ -5,8 +5,9 @@ describe('idempotency', () => {
   it('returns same result for duplicated finalize idempotency key', async () => {
     const { repository } = await createRuntime();
 
-    await repository.createPendingGroup({
-      question_group_id: 'qg_idem_1',
+    const created = await repository.createPendingGroup({
+      agent_identity: 'api_key:test-agent',
+      agent_session_id: 'session-idem-1',
       title: 'group',
       questions: [
         {
@@ -22,13 +23,13 @@ describe('idempotency', () => {
     });
 
     const first = await repository.finalizeAnswers(
-      'qg_idem_1',
+      created.question_group_id,
       { q_1: { value: 'A' } },
       'idem-1'
     );
 
     const second = await repository.finalizeAnswers(
-      'qg_idem_1',
+      created.question_group_id,
       { q_1: { value: 'B' } },
       'idem-1'
     );

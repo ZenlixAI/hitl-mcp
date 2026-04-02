@@ -95,6 +95,20 @@ function mapEnv(env: Record<string, string>): Partial<AppConfig> {
     mapped.security = { apiKey: env.HITL_API_KEY };
   }
 
+  if (env.HITL_AGENT_AUTH_MODE || env.HITL_AGENT_SESSION_HEADER || env.HITL_CREATE_CONFLICT_POLICY) {
+    mapped.agentIdentity = {
+      ...(env.HITL_AGENT_AUTH_MODE
+        ? { authMode: env.HITL_AGENT_AUTH_MODE as AppConfig['agentIdentity']['authMode'] }
+        : {}),
+      ...(env.HITL_AGENT_SESSION_HEADER
+        ? { sessionHeader: env.HITL_AGENT_SESSION_HEADER }
+        : {}),
+      ...(env.HITL_CREATE_CONFLICT_POLICY
+        ? { createConflictPolicy: env.HITL_CREATE_CONFLICT_POLICY as AppConfig['agentIdentity']['createConflictPolicy'] }
+        : {})
+    } as AppConfig['agentIdentity'];
+  }
+
   if (env.HITL_LOG_LEVEL || env.HITL_ENABLE_METRICS) {
     mapped.observability = {
       ...(env.HITL_LOG_LEVEL

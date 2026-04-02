@@ -8,5 +8,10 @@ export const defaultConfig: AppConfig = {
   ttl: { defaultSeconds: 7 * 24 * 3600, answeredRetentionSeconds: 30 * 24 * 3600 },
   pending: { maxWaitSeconds: 0 },
   security: {},
+  agentIdentity: {
+    authMode: 'api_key',
+    sessionHeader: 'x-agent-session-id',
+    createConflictPolicy: 'error'
+  },
   observability: { logLevel: 'info', enableMetrics: true }
 };

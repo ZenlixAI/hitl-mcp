@@ -8,8 +8,9 @@ describe('readiness and metrics', () => {
     const ready = await runtime.app.request('/api/v1/readyz');
     expect(ready.status).toBe(200);
 
-    await runtime.repository.createPendingGroup({
-      question_group_id: 'qg_metrics_1',
+    const created = await runtime.repository.createPendingGroup({
+      agent_identity: 'api_key:test-agent',
+      agent_session_id: 'session-metrics-1',
       title: 'group',
       questions: [
         {
@@ -21,7 +22,7 @@ describe('readiness and metrics', () => {
       ]
     });
 
-    const finalize = await runtime.app.request('/api/v1/question-groups/qg_metrics_1/answers/finalize', {
+    const finalize = await runtime.app.request(`/api/v1/question-groups/${created.question_group_id}/answers/finalize`, {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ answers: { q_range_1: { value: 99 } } })
