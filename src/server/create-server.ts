@@ -1,5 +1,6 @@
 import { Hono } from 'hono';
 import { HitlService } from '../core/hitl-service';
+import { apiKeyAuth } from '../http/middleware/auth';
 import { requestIdMiddleware } from '../http/middleware/request-id';
 import { questionRoutes } from '../http/routes/questions';
 import { questionGroupRoutes } from '../http/routes/question-groups';
@@ -28,6 +29,11 @@ export async function createRuntime() {
   const service = new HitlService(repository, waiter, 0);
 
   app.use('*', requestIdMiddleware);
+  const apiKey = process.env.HITL_API_KEY;
+  if (apiKey) {
+    app.use('/api/v1/question-groups/*', apiKeyAuth(apiKey));
+    app.use('/api/v1/questions/*', apiKeyAuth(apiKey));
+  }
 
   app.get('/api/v1/healthz', (c) => {
     return c.json(ok(c.get('requestId') ?? 'local', { status: 'ok' }));
