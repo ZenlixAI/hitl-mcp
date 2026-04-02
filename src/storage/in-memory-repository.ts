@@ -12,6 +12,7 @@ type GroupRecord = {
 
 export class InMemoryHitlRepository implements HitlRepository {
   private groups = new Map<string, GroupRecord>();
+  private finalizeIdempotency = new Map<string, FinalizeResult>();
 
   async createPendingGroup(input: any): Promise<void> {
     const now = new Date().toISOString();
@@ -46,7 +47,16 @@ export class InMemoryHitlRepository implements HitlRepository {
     };
   }
 
-  async finalizeAnswers(groupId: string, answers: Record<string, unknown>): Promise<FinalizeResult> {
+  async finalizeAnswers(
+    groupId: string,
+    answers: Record<string, unknown>,
+    idempotencyKey?: string
+  ): Promise<FinalizeResult> {
+    if (idempotencyKey) {
+      const cached = this.finalizeIdempotency.get(idempotencyKey);
+      if (cached) return cached;
+    }
+
     const group = this.groups.get(groupId);
     if (!group) throw new Error('QUESTION_GROUP_NOT_FOUND');
     transitionStatus(group.status, 'answered');
@@ -56,11 +66,17 @@ export class InMemoryHitlRepository implements HitlRepository {
     group.answers = answers;
     group.updated_at = answeredAt;
 
-    return {
+    const result = {
       status: 'answered',
       answered_question_ids: Object.keys(answers),
       answered_at: answeredAt
     };
+
+    if (idempotencyKey) {
+      this.finalizeIdempotency.set(idempotencyKey, result);
+    }
+
+    return result;
   }
 
   async cancelGroup(groupId: string, reason?: string): Promise<{ status: 'cancelled'; reason?: string }> {
