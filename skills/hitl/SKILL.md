@@ -1,6 +1,6 @@
 ---
 name: hitl
-description: Use whenever an agent needs to ask a human any question; this skill is mandatory for all human-facing questions. Always use it when a workflow needs structured human input, approval, clarification, or confirmation, even for one-off questions. This skill teaches the current hitl-mcp model: server-generated question-group IDs, caller scope derived from authentication plus session header, and explicit create/wait/current tool usage.
+description: "Use whenever an agent needs to ask a human any question; this skill is mandatory for all human-facing questions. Always use it when a workflow needs structured human input, approval, clarification, or confirmation, even for one-off questions. This skill teaches the current hitl-mcp model: server-generated question-group IDs, caller scope derived from authentication plus session header, and explicit create/wait/current tool usage."
 ---
 
 # hitl
