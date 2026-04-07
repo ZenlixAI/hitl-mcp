@@ -5,7 +5,6 @@ import { apiKeyAuth, resolveApiKeyPrincipal } from '../http/middleware/auth';
 import { requestContextMiddleware } from '../http/middleware/request-context';
 import { requestIdMiddleware } from '../http/middleware/request-id';
 import { questionRoutes } from '../http/routes/questions';
-import { requestRoutes } from '../http/routes/requests';
 import { ok } from '../http/response';
 import { injectCallerScopeIntoMcpState } from '../mcp/caller-scope';
 import { registerHitlTools } from '../mcp/register-tools';
@@ -52,7 +51,13 @@ export async function createRuntime() {
     ttlSeconds: config.ttl.defaultSeconds
   });
   const waiter = new Waiter();
-  const service = new HitlService(repository, waiter, config.pending.maxWaitSeconds, metrics);
+  const service = new HitlService(
+    repository,
+    waiter,
+    config.pending.maxWaitSeconds,
+    config.pending.waitMode,
+    metrics
+  );
   const server = new MCPServer({
     name: config.server.name,
     title: 'HITL MCP',
@@ -94,6 +99,15 @@ export async function createRuntime() {
   });
 
   const apiKey = config.security.apiKey;
+  const questionContext = requestContextMiddleware({
+    sessionHeader: config.agentIdentity.sessionHeader,
+    resolveAgentIdentity: (c) =>
+      c.get('agentIdentity') ??
+      resolveApiKeyPrincipal(c, apiKey ?? '') ??
+      c.req.header('x-agent-identity') ??
+      null
+  });
+
   if (apiKey) {
     app.use('/mcp*', apiKeyAuth(apiKey));
     app.use(
@@ -103,16 +117,13 @@ export async function createRuntime() {
         resolveAgentIdentity: (c) => c.get('agentIdentity') ?? resolveApiKeyPrincipal(c, apiKey)
       })
     );
-    app.use(`${config.http.apiPrefix}/requests/*`, apiKeyAuth(apiKey));
     app.use(`${config.http.apiPrefix}/questions/*`, apiKeyAuth(apiKey));
-    app.use(
-      `${config.http.apiPrefix}/requests/current`,
-      requestContextMiddleware({
-        sessionHeader: config.agentIdentity.sessionHeader,
-        resolveAgentIdentity: (c) => resolveApiKeyPrincipal(c, apiKey)
-      })
-    );
   }
+
+  app.use(`${config.http.apiPrefix}/questions`, questionContext);
+  app.use(`${config.http.apiPrefix}/questions/pending`, questionContext);
+  app.use(`${config.http.apiPrefix}/questions/answers`, questionContext);
+  app.use(`${config.http.apiPrefix}/questions/cancel`, questionContext);
 
   app.get(`${config.http.apiPrefix}/healthz`, (c) => {
     return c.json(ok(c.get('requestId') ?? 'local', { status: 'ok' }));
@@ -134,8 +145,7 @@ export async function createRuntime() {
     return c.json(ok(c.get('requestId') ?? 'local', metrics.snapshot()));
   });
 
-  app.route(config.http.apiPrefix, requestRoutes({ repository, waiter, metrics }));
-  app.route(config.http.apiPrefix, questionRoutes({ repository }));
+  app.route(config.http.apiPrefix, questionRoutes({ service, metrics }));
 
   return { app, server, repository, waiter, service, config, metrics };
 }

@@ -1,91 +1,114 @@
-# HTTP API Contract
+# HTTP API
 
-统一响应：
+Response envelope:
 
 ```json
 {
-  "request_id": "uuid",
+  "request_id": "http-request-id",
   "success": true,
   "data": {},
   "error": null
 }
 ```
 
-## GET /api/v1/healthz
+## `GET /api/v1/healthz`
 
-返回健康状态。
+Health check.
 
-## GET /api/v1/readyz
+## `GET /api/v1/readyz`
 
-返回依赖就绪状态。
+Readiness check.
 
-## GET /api/v1/metrics
+## `GET /api/v1/metrics`
 
-返回服务指标快照。
+Metrics snapshot.
 
-## GET /api/v1/requests/current
+## `POST /api/v1/questions`
 
-按当前调用方作用域返回 pending 请求。
+Create one or more pending questions for the current caller scope.
 
-要求：
-- `x-api-key`，当 `HITL_API_KEY` 配置时
+Headers:
+
 - `x-agent-session-id`
+- `x-agent-identity` when HTTP auth is not enabled
+- `x-api-key` when `HITL_API_KEY` is enabled
 
-错误：
-- `404 PENDING_REQUEST_NOT_FOUND`
-
-## GET /api/v1/requests/{request_id}
-
-按 `request_id` 查询请求。
-
-错误：
-- `404 REQUEST_NOT_FOUND`
-
-## GET /api/v1/questions/{question_id}
-
-按 `question_id` 查询题目。
-
-错误：
-- `404 QUESTION_NOT_FOUND`
-
-## PUT /api/v1/requests/{request_id}/answers/finalize
-
-提交最终答案。
-
-请求体：
+Body:
 
 ```json
 {
-  "idempotency_key": "idem-1",
-  "answers": {
-    "q_1": { "value": "A" }
-  },
-  "skipped_question_ids": ["q_optional_1"],
-  "finalized_by": "agent-server",
-  "extra": {}
+  "title": "Release Decision",
+  "questions": [
+    {
+      "question_id": "q_canary",
+      "type": "single_choice",
+      "title": "Can we start canary deployment?",
+      "options": [
+        { "value": "yes", "label": "Yes" },
+        { "value": "no", "label": "No" }
+      ]
+    }
+  ]
 }
 ```
 
-错误：
-- `404 REQUEST_NOT_FOUND`
+## `GET /api/v1/questions/pending`
+
+Return all pending questions in the current caller scope.
+
+## `POST /api/v1/questions/answers`
+
+Submit newly answered or skipped questions.
+
+Body:
+
+```json
+{
+  "answers": {
+    "q_canary": { "value": "yes" }
+  },
+  "skipped_question_ids": ["q_note"],
+  "idempotency_key": "idem-1"
+}
+```
+
+Rules:
+
+- answers may contain any subset of pending questions
+- optional questions may be skipped explicitly
+- required questions cannot be skipped
+- progress is accumulated server-side
+
+Errors:
+
+- `422 QUESTION_NOT_FOUND`
 - `422 ANSWER_VALIDATION_FAILED`
 
-说明：
-- 可选题必须“回答或显式忽略（`skipped_question_ids`）”。
+## `POST /api/v1/questions/cancel`
 
-成功时将 pending 请求切到 `answered`，并唤醒对应等待调用。
+Cancel pending questions in the current caller scope.
 
-## POST /api/v1/requests/{request_id}/cancel
+Body:
 
-取消请求并唤醒等待调用。
+```json
+{
+  "question_ids": ["q_canary"],
+  "reason": "no longer needed"
+}
+```
 
-## POST /api/v1/requests/{request_id}/expire
+Or:
 
-手动过期请求并唤醒等待调用。
+```json
+{
+  "cancel_all": true
+}
+```
 
-## 鉴权
+## `GET /api/v1/questions/:question_id`
 
-当环境变量 `HITL_API_KEY` 设置后，以下路径需要请求头 `x-api-key`：
+Fetch one question by `question_id`.
 
-- `/api/v1/requests/*`
-- `/api/v1/questions/*`
+Errors:
+
+- `404 QUESTION_NOT_FOUND`

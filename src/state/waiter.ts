@@ -1,20 +1,20 @@
 export class Waiter {
   private waiters = new Map<string, (payload: unknown) => void>();
 
-  wait(groupId: string, timeoutMs: number): Promise<unknown> {
+  wait(scopeKey: string, timeoutMs: number): Promise<unknown> {
     return new Promise((resolve, reject) => {
       const timer = timeoutMs > 0 ? setTimeout(() => reject(new Error('wait timeout')), timeoutMs) : null;
 
-      this.waiters.set(groupId, (payload: unknown) => {
+      this.waiters.set(scopeKey, (payload: unknown) => {
         if (timer) clearTimeout(timer);
-        this.waiters.delete(groupId);
+        this.waiters.delete(scopeKey);
         resolve(payload);
       });
     });
   }
 
-  notify(groupId: string, payload: unknown) {
-    const waiter = this.waiters.get(groupId);
+  notify(scopeKey: string, payload: unknown) {
+    const waiter = this.waiters.get(scopeKey);
     if (waiter) waiter(payload);
   }
 

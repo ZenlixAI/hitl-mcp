@@ -79,7 +79,7 @@ export const askQuestionGroupInputSchema = z.object({
     .optional()
 });
 
-export const createRequestInputSchema = z
+export const askQuestionsInputSchema = z
   .object({
     title: z.string().min(1),
     description: z.string().optional(),
@@ -91,16 +91,20 @@ export const createRequestInputSchema = z
   })
   .strict();
 
-export const waitQuestionGroupInputSchema = z
-  .object({
-    request_id: z.string().min(1).optional()
-  })
-  .strict();
+export const waitQuestionsInputSchema = z.object({}).strict();
 
-export const finalizeAnswersSchema = z.object({
+export const submitAnswersInputSchema = z.object({
   idempotency_key: z.string().optional(),
-  answers: z.record(z.string(), z.object({ value: z.any() })),
+  answers: z.record(z.string(), z.object({ value: z.any() })).optional(),
   skipped_question_ids: z.array(z.string().min(1)).optional(),
   finalized_by: z.string().optional(),
   extra: z.record(z.string(), z.any()).optional()
 });
+
+export const cancelQuestionsInputSchema = z
+  .object({
+    question_ids: z.array(z.string().min(1)).optional(),
+    cancel_all: z.boolean().optional(),
+    reason: z.string().optional()
+  })
+  .strict();

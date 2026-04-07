@@ -1,227 +1,58 @@
 # hitl-mcp
 
-一个面向 Agentic 系统的人类在环（Human-in-the-loop）MCP Server。
+面向 Agent 工作流的 question-only HITL MCP 服务。
 
-[![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue.svg)](https://www.typescriptlang.org/)
-[![MCP](https://img.shields.io/badge/MCP-Protocol-green.svg)](https://modelcontextprotocol.io/)
-[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+## 对外模型
 
-[English](README.md) | [中文](README-zh.md)
+- 对外只暴露 `question`
+- 同一个 caller scope 下允许同时存在多个 pending questions
+- 支持部分提交，服务端累积持久化进度
+- 内部如果仍然保留分组，只作为存储实现细节，不出现在 MCP 和 HTTP API 中
 
----
+caller scope 由以下字段确定：
 
-## 目录
+- `agent_identity`
+- `agent_session_id`，默认从 `x-agent-session-id` 读取
 
-- [项目背景](#项目背景)
-- [项目目标](#项目目标)
-- [用户视角](#用户视角)
-- [端到端流程](#端到端流程)
-- [关键设计决策](#关键设计决策)
-- [当前能力](#当前能力)
-- [快速开始](#快速开始)
-- [配置项](#配置项)
-- [使用示例](#使用示例)
-- [MCP 工具说明](#mcp-工具说明)
-- [HTTP API 说明](#http-api-说明)
-- [项目结构](#项目结构)
-- [文档导航](#文档导航)
-- [开发与测试](#开发与测试)
-- [运维与部署](#运维与部署)
-- [项目状态](#项目状态)
-- [许可证](#许可证)
-- [版权](#版权)
+## MCP 工具
 
----
-
-## 项目背景
-
-在复杂 Agent 工作流中，直接用 assistant 文本提问存在天然问题：
-
-1. 缺少结构化输出，前端难以稳定渲染问题卡片。
-2. 缺少稳定的请求与问题生命周期跟踪。
-3. 不利于“用户回答 -> 服务端后处理 -> 最终确认”的工程链路。
-
-传统的阻塞式单工具 HITL 方案对 Agent 平台也不够友好：
-
-1. Agent 自己持有本应由服务端拥有的标识符。
-2. 重连、重试、多 Session 下的作用域不清晰。
-3. client 难以在用户真正回答前稳定感知 `pending` 请求。
-
-`hitl-mcp` 用服务端拥有的身份和生命周期模型解决这些问题：
-
-1. `agent_identity` 由 MCP 连接认证推导。
-2. `agent_session_id` 由稳定的连接级 header 推导，默认 `x-agent-session-id`。
-3. `request_id` 永远由服务端生成。
-4. 对同一个 `(agent_identity, agent_session_id)`，同时最多只有一个 `pending` 请求。
-
-## 项目目标
-
-- 永远以 **Request** 发问，不支持裸问题。
-- 让请求主键和生命周期归服务端所有。
-- 让 Agent 平台在用户最终回答前就能观察到 `pending` 请求。
-- 支持题型：
-  - `single_choice`
-  - `multi_choice`
-  - `text`
-  - `boolean`
-  - `range`
-- 支持必答（默认）与可选。
-- request/question 均支持 `tags` 与 `extra`。
-- HTTP API 采用“按 ID 操作”模型。
-- 使用 KV（Redis）做持久化与 TTL。
-
-## 用户视角
-
-### 开发者（Agent 开发）
-
-通过 MCP 工具完成创建、等待与查询：
-
-- `hitl_create_request`
-- `hitl_wait_request`
-- `hitl_get_current_request`
-- `hitl_get_request_status`
+- `hitl_ask`
+- `hitl_wait`
+- `hitl_get_pending_questions`
+- `hitl_submit_answers`
+- `hitl_cancel_questions`
 - `hitl_get_question`
-- `hitl_cancel_request`
 
-你的 Agent 不需要自己生成请求 ID，也不需要发明额外的 pending 协议。
+## HTTP API
 
-### 开发者（后端服务）
+- `POST /api/v1/questions`
+- `GET /api/v1/questions/pending`
+- `POST /api/v1/questions/answers`
+- `POST /api/v1/questions/cancel`
+- `GET /api/v1/questions/:question_id`
 
-通过 HTTP 控制面提交最终答案与管理状态：
+## Wait 模式
 
-- `PUT /api/v1/requests/{id}/answers/finalize`
-- `POST /api/v1/requests/{id}/cancel`
-- `POST /api/v1/requests/{id}/expire`
-- `GET /api/v1/requests/current`
-- `GET /api/v1/requests/{id}`
-- `GET /api/v1/questions/{id}`
+通过 `HITL_WAIT_MODE` 配置：
 
-不提供 list API（设计使然）。
+- `terminal_only`：只有当当前 caller scope 下没有 pending questions 时，`wait` 才返回
+- `progressive`：每次问题状态变化都返回一次，调用方可继续发起下一次 `wait`
 
-## 端到端流程
+默认值：`terminal_only`
 
-1. Agent 调用 `hitl_create_request` 发出结构化请求。
-2. 服务端认证调用方，读取 `x-agent-session-id`，生成 `request_id`，并落为 `pending`。
-3. client 或后端立即拿到返回的 `request_id`，可以感知和展示 pending 状态。
-4. 当需要阻塞等待时，Agent 调用 `hitl_wait_request`。
-5. 用户在客户端完成回答。
-6. 你的后端对回答做业务后处理。
-7. 后端调用 `answers/finalize` 提交最终答案。
-8. `hitl-mcp` 校验：
-   - 不合法：返回 `422 ANSWER_VALIDATION_FAILED`，状态保持 `pending`
-   - 合法：状态切为 `answered`，唤醒阻塞的 MCP wait 调用
-9. Agent 拿到最终答案并继续执行。
+## 部分提交
 
-## 关键设计决策
+`POST /api/v1/questions/answers` 和 `hitl_submit_answers` 支持：
 
-### 1) 服务端生成 Request ID
+- `answers`：本次新回答的一部分问题
+- `skipped_question_ids`：本次显式忽略的一部分可选问题
+- `idempotency_key`：可选
 
-`request_id` 不允许由 Agent 提供，确保对象主键和生命周期权限归服务端所有。
+每次提交都会累积保存，不要求一次性答完所有问题。
 
-### 2) 稳定的调用方作用域
+## 示例
 
-调用方作用域由可信的连接上下文决定：
-
-- `agent_identity` 来自连接认证
-- `agent_session_id` 来自稳定的连接级 header
-
-不再依赖 tool input 中的 session metadata。
-
-### 3) 拆分 Create 与 Wait
-
-MCP 工具面被明确拆成：
-
-- `create`：创建 `pending` 请求并立即返回
-- `wait`：仅在 Agent 需要阻塞语义时才等待
-- `get_current`：用于按调用方作用域恢复当前 pending 状态
-
-### 4) 每个调用方作用域只允许一个 Pending
-
-对同一个 `(agent_identity, agent_session_id)`，同时最多存在一个 `pending` 请求。
-
-这让 client 侧 pending 状态保持确定性。
-
-### 5) 校验与幂等
-
-finalize 支持类型/范围校验与必答校验；可选题若不回答，必须显式放入 `skipped_question_ids`。create/finalize 都可通过 `idempotency_key` 实现幂等。
-
-### 6) 存储策略
-
-- 内存仓储：本地开发。
-- Redis 仓储：持久化与 TTL。
-- 为调用方作用域查找和 create 幂等维护额外索引。
-
-## 当前能力
-
-- 问题与答案 schema、校验器。
-- MCP 工具：create/wait/current/status/get/cancel。
-- HTTP API：health、ready、metrics、query、current、finalize、cancel、expire。
-- 状态机：`pending -> answered|cancelled|expired`。
-- 显式等待与唤醒机制。
-- HTTP API key 鉴权（开启后要求 `x-api-key`）。
-- 已认证调用方身份与 session header 的 request context 提取。
-- Redis 仓储实现与测试。
-
-## 快速开始
-
-### 安装依赖
-
-```bash
-npm install
-```
-
-### 启动开发服务
-
-```bash
-npm run dev
-```
-
-默认端口：`3000`
-
-### 健康检查
-
-```bash
-npx hono request hono.request.ts -P /api/v1/healthz
-```
-
-### 运行测试
-
-```bash
-npm run test
-```
-
-## 配置项
-
-环境变量：
-
-- `PORT`：服务端口（默认 `3000`）
-- `MCP_URL`：MCP 基础地址（默认 `http://localhost:3000`）
-- `HITL_PENDING_MAX_WAIT_SECONDS`：阻塞等待秒数，`0` 为无限等待
-- `HITL_STORAGE`：`memory` 或 `redis`
-- `HITL_REDIS_URL`：Redis 地址（默认 `redis://127.0.0.1:6379`）
-- `HITL_REDIS_PREFIX`：Redis key 前缀（默认 `hitl`）
-- `HITL_TTL_SECONDS`：TTL（默认 `604800`）
-- `HITL_API_KEY`：开启后受保护 HTTP 路由需要 `x-api-key`
-- `HITL_AGENT_AUTH_MODE`：`api_key` 或 `bearer`
-- `HITL_AGENT_SESSION_HEADER`：默认 `x-agent-session-id`
-- `HITL_CREATE_CONFLICT_POLICY`：`error` 或 `reuse_pending`
-- `HITL_SERVER_NAME`：可选，Server 名称覆盖
-- `HITL_SERVER_VERSION`：可选，Server 版本覆盖
-- `HITL_HTTP_HOST`：可选，HTTP 绑定地址
-- `HITL_HTTP_API_PREFIX`：可选，默认 `/api/v1`
-- `HITL_ANSWERED_RETENTION_SECONDS`：可选
-- `HITL_LOG_LEVEL`：`debug|info|warn|error`
-- `HITL_ENABLE_METRICS`：`true|false`
-
-优先级：
-
-- `env` > `.env` > `config/hitl-mcp.yaml` > defaults
-
-## 使用示例
-
-### Agent 调用 MCP 创建请求
-
-工具：`hitl_create_request`
+创建问题：
 
 ```json
 {
@@ -235,364 +66,63 @@ npm run test
         { "value": "yes", "label": "是" },
         { "value": "no", "label": "否" }
       ]
+    },
+    {
+      "question_id": "q_note",
+      "type": "text",
+      "title": "还有补充吗？",
+      "required": false
     }
   ]
 }
 ```
 
-### Agent 等待当前 Pending 请求
-
-工具：`hitl_wait_request`
-
-```json
-{}
-```
-
-### 服务端 finalize
+部分提交：
 
 ```bash
-curl -X PUT "http://localhost:3000/api/v1/requests/<request_id>/answers/finalize" \
+curl -X POST "http://localhost:3000/api/v1/questions/answers" \
   -H "Content-Type: application/json" \
-  -H "x-api-key: ${HITL_API_KEY}" \
+  -H "x-agent-identity: api_key:test-agent" \
+  -H "x-agent-session-id: session-123" \
   -d '{
-    "idempotency_key": "idem-release-001",
     "answers": {
       "q_canary": { "value": "yes" }
-    },
-    "finalized_by": "release-orchestrator"
+    }
   }'
 ```
 
-## MCP 工具说明
+## 配置
 
-### `hitl_create_request`
+- `PORT`
+- `MCP_URL`
+- `HITL_PENDING_MAX_WAIT_SECONDS`
+- `HITL_WAIT_MODE=terminal_only|progressive`
+- `HITL_STORAGE=memory|redis`
+- `HITL_REDIS_URL`
+- `HITL_REDIS_PREFIX`
+- `HITL_TTL_SECONDS`
+- `HITL_ANSWERED_RETENTION_SECONDS`
+- `HITL_API_KEY`
+- `HITL_AGENT_AUTH_MODE`
+- `HITL_AGENT_SESSION_HEADER`
+- `HITL_CREATE_CONFLICT_POLICY`
+- `HITL_SERVER_NAME`
+- `HITL_SERVER_VERSION`
+- `HITL_HTTP_HOST`
+- `HITL_HTTP_API_PREFIX`
+- `HITL_LOG_LEVEL`
+- `HITL_ENABLE_METRICS`
 
-用途：
+## 开发
 
-- 为当前认证调用方作用域创建一个 `pending` 请求，并立即返回。
-
-输入（关键字段）：
-
-- `title`（string，必填）
-- `description`（string，可选，支持 markdown）
-- `tags`（string[]，可选）
-- `extra`（object，可选）
-- `ttl_seconds`（number，可选）
-- `questions`（array，必填）
-- `idempotency_key`（string，可选）
-
-调用方作用域：
-
-- `agent_identity` 由认证推导
-- `agent_session_id` 由配置的 session header 推导
-
-输出：
-
-- 服务端生成的 `request_id`
-- `status: "pending"`
-- 调用方作用域字段
-- 时间戳与请求载荷
-
-### `hitl_wait_request`
-
-用途：
-
-- 等待请求进入终态（`answered`、`cancelled`、`expired`）。
-
-输入：
-
-- `request_id`（string，可选）
-
-行为：
-
-- 传 `request_id` 时，等待指定请求。
-- 不传时，等待当前调用方作用域下唯一的 pending 请求。
-
-输出：
-
-- finalize 成功：`status=answered` + 校验后的 `answers`
-- 取消：`status=cancelled`
-- 过期：`status=expired`
-
-说明：
-
-- 该工具是阻塞式设计。
-- 当 `HITL_PENDING_MAX_WAIT_SECONDS=0` 时，为无限等待。
-
-### `hitl_get_current_request`
-
-用途：
-
-- 返回当前调用方作用域下的 pending 请求。
-
-输出：
-
-- 存在时返回完整 pending 请求对象。
-- 不存在时返回 `PENDING_REQUEST_NOT_FOUND`。
-
-### `hitl_get_request_status`
-
-用途：
-
-- 按 ID 查询请求生命周期状态。
-
-输入：
-
-- `request_id`（string）
-
-输出：
-
-- `request_id`
-- `status`（`pending|answered|cancelled|expired`）
-- `updated_at`
-
-### `hitl_get_question`
-
-用途：
-
-- 按 `question_id` 查询题目定义。
-
-输入：
-
-- `question_id`（string）
-
-输出：
-
-- 题目完整对象。
-
-### `hitl_cancel_request`
-
-用途：
-
-- 取消 pending 请求，并唤醒阻塞中的 wait 调用。
-
-输入：
-
-- `request_id`（string）
-- `reason`（string，可选）
-
-输出：
-
-- `status: "cancelled"`
-- 可选 `reason`
-
-## HTTP API 说明
-
-基础路径：
-
-- `/api/v1`
-
-统一响应包裹：
-
-```json
-{
-  "request_id": "uuid",
-  "success": true,
-  "data": {},
-  "error": null
-}
+```bash
+npm install
+npm test
+npm run dev
 ```
 
-### `GET /healthz`
-
-用途：
-
-- 健康检查。
-
-成功：
-
-- `200`，且 `data.status = "ok"`。
-
-### `GET /readyz`
-
-用途：
-
-- 部署系统 readiness 探针。
-
-行为：
-
-- 存储可用时返回 `200` 且 `status=ready`。
-- 存储不可用时返回 `503` 且 `status=not_ready`。
-
-### `GET /metrics`
-
-用途：
-
-- 运维指标端点。
-
-响应包含：
-
-- `counters.finalize_validation_failed_total`
-- `counters.finalize_success_total`
-- `gauges.pending_count`
-- `histograms.wait_duration_ms`（count/min/max/avg）
-
-### `GET /requests/current`
-
-用途：
-
-- 按已认证调用方作用域查询当前 pending 请求。
-
-请求头：
-
-- 开启 API key 时需要 `x-api-key`
-- 配置的 session header，默认 `x-agent-session-id`
-
-错误：
-
-- `401 UNAUTHORIZED`
-- `400 AGENT_SESSION_ID_REQUIRED`
-- `404 PENDING_REQUEST_NOT_FOUND`
-
-### `GET /requests/{request_id}`
-
-用途：
-
-- 按 `request_id` 查询请求。
-
-错误：
-
-- `404 REQUEST_NOT_FOUND`
-
-### `GET /questions/{question_id}`
-
-用途：
-
-- 按 `question_id` 查询题目。
-
-错误：
-
-- `404 QUESTION_NOT_FOUND`
-
-### `PUT /requests/{request_id}/answers/finalize`
-
-用途：
-
-- 提交经过后端处理的最终答案。
-
-请求体：
-
-```json
-{
-  "idempotency_key": "idem-1",
-  "answers": {
-    "q_1": { "value": "A" }
-  },
-  "skipped_question_ids": ["q_optional_1"],
-  "finalized_by": "agent-server",
-  "extra": {}
-}
-```
-
-行为：
-
-- 进行类型/范围/必答校验。
-- 可选题必须“回答或显式忽略（`skipped_question_ids`）”。
-- 若不合法：保持 `pending`。
-- 若合法：切换到 `answered` 并唤醒阻塞的 MCP wait 调用。
-
-成功：
-
-- `200`，包含 `status: "answered"`、`answered_question_ids` 与 `skipped_question_ids`。
-
-校验失败：
-
-- `422 ANSWER_VALIDATION_FAILED`，并返回逐题错误详情。
-
-幂等：
-
-- 复用相同 `idempotency_key` 应返回同一 finalize 结果。
-
-### `POST /requests/{request_id}/cancel`
-
-用途：
-
-- 取消 pending 请求。
-
-行为：
-
-- 状态置为 `cancelled`。
-- 唤醒阻塞中的 MCP wait 调用（终态返回）。
-
-### `POST /requests/{request_id}/expire`
-
-用途：
-
-- 强制使请求过期。
-
-行为：
-
-- 状态置为 `expired`。
-- 唤醒阻塞中的 MCP wait 调用（终态返回）。
-
-### 鉴权
-
-当设置 `HITL_API_KEY` 时：
-
-- 受保护路由需要 `x-api-key` 请求头。
-- 缺失或错误返回 `401 UNAUTHORIZED`。
-
-### 常见错误码
-
-- `REQUEST_NOT_FOUND`（`404`）
-- `QUESTION_NOT_FOUND`（`404`）
-- `PENDING_REQUEST_NOT_FOUND`（`404`）
-- `AGENT_IDENTITY_REQUIRED`（`401`）
-- `AGENT_SESSION_ID_REQUIRED`（`400`）
-- `ANSWER_VALIDATION_FAILED`（`422`）
-- `UNAUTHORIZED`（`401`）
-
-## 项目结构
-
-```text
-hitl-mcp/
-├── index.ts
-├── src/
-├── config/
-├── tests/
-├── docs/
-├── public/
-├── README.md
-├── README-zh.md
-└── package.json
-```
-
-## 文档导航
-
-- MCP 工具契约：[docs/api/mcp-tools.md](docs/api/mcp-tools.md)
-- HTTP API 契约：[docs/api/http-openapi.md](docs/api/http-openapi.md)
-- 产品技术设计：[docs/design-doc.md](docs/design-doc.md)
-- 重构实施计划：[docs/superpowers/plans/2026-04-02-hitl-agent-identity-session-refactor.md](docs/superpowers/plans/2026-04-02-hitl-agent-identity-session-refactor.md)
-- 生产运维手册：[docs/runbooks/production.md](docs/runbooks/production.md)
-
-## 开发与测试
-
-当前测试覆盖了单元与集成场景，包括作用域 pending 行为、pending->answered 闭环与幂等。
-
-## 运维与部署
-
-Docker 相关文件：
-
-- `Dockerfile`
-- `.dockerignore`
-- `docker-compose.yml`（包含 Redis + app service）
-
-## 运维与部署
-
-Docker 相关文件：
-
-- `Dockerfile`
-- `.dockerignore`
-- `docker-compose.yml`（包含 Redis + app service）
-
-## 项目状态
-
-当前仓库已具备基于新 identity/session 作用域模型的 HITL 主链路和主要集成面。面向大规模生产部署时，仍可继续增强（例如更完整的认证方式、指标导出与运维手册）。
-
-## 许可证
-
-MIT，见 [LICENSE](LICENSE)。
-
-## 版权
-
-Copyright (c) 2026 ZenlixAI. All rights reserved.
+## 文档
+
+- [MCP 工具](docs/api/mcp-tools.md)
+- [HTTP API](docs/api/http-openapi.md)
+- [HITL Skill](skills/hitl/SKILL.md)

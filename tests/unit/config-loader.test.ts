@@ -11,4 +11,12 @@ describe('config loader', () => {
 
     expect(config.http.port).toBe(7777);
   });
+
+  it('loads wait mode from env', async () => {
+    const config = await resolveConfig({
+      env: { HITL_WAIT_MODE: 'progressive' }
+    });
+
+    expect(config.pending.waitMode).toBe('progressive');
+  });
 });

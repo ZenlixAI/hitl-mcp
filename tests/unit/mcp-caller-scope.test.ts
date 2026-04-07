@@ -15,7 +15,7 @@ describe('mcp caller scope bridge', () => {
 
       const mcpContext: MiddlewareContext = {
         method: 'tools/call',
-        params: { name: 'hitl_create_request' },
+        params: { name: 'hitl_ask' },
         state: new Map()
       };
 
@@ -45,7 +45,7 @@ describe('mcp caller scope bridge', () => {
 
       const mcpContext: MiddlewareContext = {
         method: 'tools/call',
-        params: { name: 'hitl_create_request' },
+        params: { name: 'hitl_ask' },
         state: new Map()
       };
 

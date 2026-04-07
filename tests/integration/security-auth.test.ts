@@ -12,13 +12,13 @@ describe('security auth middleware', () => {
 
   it('returns 401 when api key is missing', async () => {
     const app = await createHttpApp();
-    const res = await app.request('/api/v1/requests/qg_1');
+    const res = await app.request('/api/v1/questions/q_1');
     expect(res.status).toBe(401);
   });
 
   it('returns non-401 when api key is present', async () => {
     const app = await createHttpApp();
-    const res = await app.request('/api/v1/requests/qg_1', {
+    const res = await app.request('/api/v1/questions/q_1', {
       headers: { 'x-api-key': 'test-api-key' }
     });
 
@@ -34,7 +34,7 @@ describe('security auth optional mode', () => {
   it('allows unauthenticated access when HITL_API_KEY is not set', async () => {
     delete process.env.HITL_API_KEY;
     const app = await createHttpApp();
-    const res = await app.request('/api/v1/requests/qg_1');
+    const res = await app.request('/api/v1/questions/q_1');
     expect(res.status).toBe(404);
   });
 });

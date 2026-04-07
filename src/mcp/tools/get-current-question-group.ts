@@ -3,21 +3,19 @@ import { z } from 'zod';
 import type { HitlService } from '../../core/hitl-service';
 import { readCallerScopeFromMcpContext } from '../caller-scope';
 
-export function registerGetCurrentQuestionGroupTool(server: MCPServer, service: HitlService) {
+export function registerGetPendingQuestionsTool(server: MCPServer, service: HitlService) {
   server.tool(
     {
-      name: 'hitl_get_current_request',
-      description: 'Get the current pending request for the caller scope.',
+      name: 'hitl_get_pending_questions',
+      description: 'Get all pending questions for the current caller scope.',
       schema: z.object({})
     },
     async (_input, ctx) => {
       try {
-        const result = await service.getCurrentRequest(readCallerScopeFromMcpContext(ctx));
-        if (!result) return error('PENDING_REQUEST_NOT_FOUND');
-        const { question_group_id, ...rest } = result as Record<string, unknown>;
-        return object({ ...rest, request_id: question_group_id });
+        const pendingQuestions = await service.getPendingQuestions(readCallerScopeFromMcpContext(ctx));
+        return object({ pending_questions: pendingQuestions });
       } catch (err) {
-        return error(err instanceof Error ? err.message : 'failed to get current request');
+        return error(err instanceof Error ? err.message : 'failed to get pending questions');
       }
     }
   );

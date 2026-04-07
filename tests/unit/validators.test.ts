@@ -22,7 +22,7 @@ describe('answer validator', () => {
     }
   });
 
-  it('requires optional questions to be explicitly skipped when unanswered', () => {
+  it('allows optional questions to remain unanswered in a partial submission', () => {
     const result = validateAnswerSet(
       [
         {
@@ -41,10 +41,7 @@ describe('answer validator', () => {
       { q_required: { value: true } }
     );
 
-    expect(result.ok).toBe(false);
-    if (!result.ok) {
-      expect(result.errors.map((item) => item.question_id)).toContain('q_optional');
-    }
+    expect(result.ok).toBe(true);
   });
 
   it('accepts explicit skip for optional questions and rejects skip for required ones', () => {

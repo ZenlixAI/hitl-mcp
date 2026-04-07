@@ -1,22 +1,26 @@
 import { describe, it, expect } from 'vitest';
 import { createHttpApp, createRuntime } from '../../src/server/create-server';
 
-describe('http finalize api', () => {
-  it('returns 404 when group does not exist', async () => {
+describe('http submit answers api', () => {
+  it('returns 422 when target questions do not exist in caller scope', async () => {
     const app = await createHttpApp();
-    const res = await app.request('/api/v1/requests/qg_missing/answers/finalize', {
-      method: 'PUT',
-      headers: { 'content-type': 'application/json' },
+    const res = await app.request('/api/v1/questions/answers', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-agent-identity': 'api_key:test-agent',
+        'x-agent-session-id': 'session-missing-1'
+      },
       body: JSON.stringify({ answers: { q_1: { value: 'A' } } })
     });
 
-    expect(res.status).toBe(404);
+    expect(res.status).toBe(422);
     const body = await res.json();
-    expect(body.error.code).toBe('REQUEST_NOT_FOUND');
+    expect(body.error.code).toBe('QUESTION_NOT_FOUND');
   });
 });
 
-describe('http finalize validation', () => {
+describe('http submit validation', () => {
   it('returns 422 when answers are invalid and keeps pending', async () => {
     const runtime = await createRuntime();
     const created = await runtime.repository.createPendingGroup({
@@ -33,9 +37,13 @@ describe('http finalize validation', () => {
       ]
     });
 
-    const res = await runtime.app.request(`/api/v1/requests/${created.question_group_id}/answers/finalize`, {
-      method: 'PUT',
-      headers: { 'content-type': 'application/json' },
+    const res = await runtime.app.request('/api/v1/questions/answers', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-agent-identity': 'api_key:test-agent',
+        'x-agent-session-id': 'session-invalid-1'
+      },
       body: JSON.stringify({ answers: { q_range_1: { value: 99 } } })
     });
 
@@ -47,9 +55,9 @@ describe('http finalize validation', () => {
     expect(status?.status).toBe('pending');
   });
 
-  it('requires explicit skip for unanswered optional questions', async () => {
+  it('accepts partial submission and keeps unanswered questions pending', async () => {
     const runtime = await createRuntime();
-    const created = await runtime.repository.createPendingGroup({
+    await runtime.repository.createPendingGroup({
       agent_identity: 'api_key:test-agent',
       agent_session_id: 'session-optional-1',
       title: 'group',
@@ -69,37 +77,24 @@ describe('http finalize validation', () => {
       ]
     });
 
-    const withoutSkip = await runtime.app.request(
-      `/api/v1/requests/${created.question_group_id}/answers/finalize`,
-      {
-        method: 'PUT',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          answers: {
-            q_required_1: { value: true }
-          }
-        })
-      }
-    );
+    const res = await runtime.app.request('/api/v1/questions/answers', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-agent-identity': 'api_key:test-agent',
+        'x-agent-session-id': 'session-optional-1'
+      },
+      body: JSON.stringify({
+        answers: {
+          q_required_1: { value: true }
+        }
+      })
+    });
 
-    expect(withoutSkip.status).toBe(422);
-
-    const withSkip = await runtime.app.request(
-      `/api/v1/requests/${created.question_group_id}/answers/finalize`,
-      {
-        method: 'PUT',
-        headers: { 'content-type': 'application/json' },
-        body: JSON.stringify({
-          answers: {
-            q_required_1: { value: true }
-          },
-          skipped_question_ids: ['q_optional_1']
-        })
-      }
-    );
-
-    expect(withSkip.status).toBe(200);
-    const payload = await withSkip.json();
-    expect(payload.data.skipped_question_ids).toEqual(['q_optional_1']);
+    expect(res.status).toBe(200);
+    const payload = await res.json();
+    expect(payload.data.status).toBe('in_progress');
+    expect(payload.data.pending_questions).toHaveLength(1);
+    expect(payload.data.pending_questions[0].question_id).toBe('q_optional_1');
   });
 });

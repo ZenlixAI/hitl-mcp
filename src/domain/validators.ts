@@ -48,7 +48,14 @@ export function validateAnswerSet(
     }
   }
 
+  const touchedQuestionIds = new Set([
+    ...Object.keys(answers),
+    ...skippedQuestionIds
+  ]);
+
   for (const question of questions) {
+    if (!touchedQuestionIds.has(question.question_id)) continue;
+
     const answer = answers[question.question_id];
     const skipped = skippedSet.has(question.question_id);
 
@@ -61,22 +68,16 @@ export function validateAnswerSet(
       continue;
     }
 
-    if (!answer) {
-      if (question.required !== false) {
-        errors.push({
-          question_id: question.question_id,
-          reason: '必答题未回答',
-          expected: 'value present'
-        });
-      } else if (!skipped) {
-        errors.push({
-          question_id: question.question_id,
-          reason: '可选题未显式忽略',
-          expected: 'answer present or skipped'
-        });
-      }
+    if (!answer && !skipped) {
+      errors.push({
+        question_id: question.question_id,
+        reason: '问题更新必须包含答案或忽略标记',
+        expected: 'answer present or skipped'
+      });
       continue;
     }
+
+    if (skipped) continue;
 
     if (question.type === 'single_choice') {
       if (

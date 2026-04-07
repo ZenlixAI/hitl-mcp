@@ -1,29 +1,29 @@
 import { object, error, type MCPServer } from 'mcp-use/server';
-import { cancelQuestionsInputSchema } from '../../domain/schemas';
+import { submitAnswersInputSchema } from '../../domain/schemas';
 import type { HitlService } from '../../core/hitl-service';
 import { readCallerScopeFromMcpContext } from '../caller-scope';
 
-export function registerCancelQuestionsTool(server: MCPServer, service: HitlService) {
+export function registerSubmitAnswersTool(server: MCPServer, service: HitlService) {
   server.tool(
     {
-      name: 'hitl_cancel_questions',
-      description: 'Cancel pending questions for the current caller scope.',
-      schema: cancelQuestionsInputSchema,
+      name: 'hitl_submit_answers',
+      description: 'Submit answers or skips for pending questions in the current caller scope.',
+      schema: submitAnswersInputSchema,
       annotations: {
-        destructiveHint: true,
+        destructiveHint: false,
         readOnlyHint: false,
         openWorldHint: false
       }
     },
     async (input, ctx) => {
       try {
-        const result = await service.cancelQuestions({
+        const result = await service.submitAnswers({
           caller: readCallerScopeFromMcpContext(ctx),
           input
         });
         return object(result);
       } catch (err) {
-        return error(err instanceof Error ? err.message : 'failed to cancel questions');
+        return error(err instanceof Error ? err.message : 'failed to submit answers');
       }
     }
   );

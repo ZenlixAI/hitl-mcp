@@ -35,7 +35,7 @@ describe('redis repository', () => {
     expect(question?.question_id).toBe('q_redis_1');
   });
 
-  it('supports create and finalize idempotency keys', async () => {
+  it('supports create and submit idempotency keys', async () => {
     const created = await repository.createPendingGroup({
       agent_identity: 'api_key:a1',
       agent_session_id: 'session-2',
@@ -65,14 +65,19 @@ describe('redis repository', () => {
       ]
     });
 
-    const first = await repository.finalizeAnswers(
-      created.question_group_id,
+    const caller = {
+      agent_identity: 'api_key:a1',
+      agent_session_id: 'session-2'
+    };
+
+    const first = await repository.submitAnswers(
+      caller,
       { q_redis_2: { value: 'A' } },
       [],
       'redis-idem-1'
     );
-    const second = await repository.finalizeAnswers(
-      created.question_group_id,
+    const second = await repository.submitAnswers(
+      caller,
       { q_redis_2: { value: 'B' } },
       [],
       'redis-idem-1'

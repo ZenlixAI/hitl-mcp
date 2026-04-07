@@ -40,4 +40,33 @@ describe('in-memory repository scoped create', () => {
     expect(current?.question_group_id).toBe(created.question_group_id);
     expect(current?.status).toBe('pending');
   });
+
+  it('supports multiple pending groups and accumulates partial submissions', async () => {
+    const repository = new InMemoryHitlRepository();
+    const caller = {
+      agent_identity: 'api_key:a3',
+      agent_session_id: 'session-3'
+    };
+
+    await repository.createPendingGroup({
+      ...caller,
+      title: 'First',
+      questions: [{ question_id: 'q31', title: 'One?', type: 'boolean' }]
+    });
+    await repository.createPendingGroup({
+      ...caller,
+      title: 'Second',
+      questions: [{ question_id: 'q32', title: 'Two?', type: 'boolean' }]
+    });
+
+    const before = await repository.getPendingQuestionsByScope(caller.agent_identity, caller.agent_session_id);
+    expect(before.map((item) => item.question_id).sort()).toEqual(['q31', 'q32']);
+
+    const result = await repository.submitAnswers(caller, { q31: { value: true } });
+    expect(result.status).toBe('in_progress');
+
+    const after = await repository.getPendingQuestionsByScope(caller.agent_identity, caller.agent_session_id);
+    expect(after).toHaveLength(1);
+    expect(after[0].question_id).toBe('q32');
+  });
 });
