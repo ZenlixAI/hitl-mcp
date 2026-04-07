@@ -68,11 +68,13 @@ describe('redis repository', () => {
     const first = await repository.finalizeAnswers(
       created.question_group_id,
       { q_redis_2: { value: 'A' } },
+      [],
       'redis-idem-1'
     );
     const second = await repository.finalizeAnswers(
       created.question_group_id,
       { q_redis_2: { value: 'B' } },
+      [],
       'redis-idem-1'
     );
 

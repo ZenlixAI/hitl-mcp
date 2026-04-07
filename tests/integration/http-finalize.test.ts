@@ -46,4 +46,60 @@ describe('http finalize validation', () => {
     const status = await runtime.repository.getGroupStatus(created.question_group_id);
     expect(status?.status).toBe('pending');
   });
+
+  it('requires explicit skip for unanswered optional questions', async () => {
+    const runtime = await createRuntime();
+    const created = await runtime.repository.createPendingGroup({
+      agent_identity: 'api_key:test-agent',
+      agent_session_id: 'session-optional-1',
+      title: 'group',
+      questions: [
+        {
+          question_id: 'q_required_1',
+          type: 'boolean',
+          title: 'required',
+          required: true
+        },
+        {
+          question_id: 'q_optional_1',
+          type: 'text',
+          title: 'optional',
+          required: false
+        }
+      ]
+    });
+
+    const withoutSkip = await runtime.app.request(
+      `/api/v1/question-groups/${created.question_group_id}/answers/finalize`,
+      {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          answers: {
+            q_required_1: { value: true }
+          }
+        })
+      }
+    );
+
+    expect(withoutSkip.status).toBe(422);
+
+    const withSkip = await runtime.app.request(
+      `/api/v1/question-groups/${created.question_group_id}/answers/finalize`,
+      {
+        method: 'PUT',
+        headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({
+          answers: {
+            q_required_1: { value: true }
+          },
+          skipped_question_ids: ['q_optional_1']
+        })
+      }
+    );
+
+    expect(withSkip.status).toBe(200);
+    const payload = await withSkip.json();
+    expect(payload.data.skipped_question_ids).toEqual(['q_optional_1']);
+  });
 });

@@ -144,6 +144,7 @@ This keeps client-side pending state deterministic.
 ### 5) Validation + Idempotency
 
 Finalize validates required fields and type/range constraints. Duplicate create/finalize requests can be idempotent via `idempotency_key`.
+For optional questions, unanswered items must be explicitly listed in `skipped_question_ids`.
 
 ### 6) Storage Strategy
 
@@ -478,6 +479,7 @@ Request body:
   "answers": {
     "q_1": { "value": "A" }
   },
+  "skipped_question_ids": ["q_optional_1"],
   "finalized_by": "agent-server",
   "extra": {}
 }
@@ -486,12 +488,13 @@ Request body:
 Behavior:
 
 - Validates answer type/range/required rules.
+- Optional questions must be either answered or explicitly skipped via `skipped_question_ids`.
 - If invalid: keeps group `pending`.
 - If valid: transitions group to `answered` and wakes blocked MCP wait calls.
 
 Success:
 
-- `200` with `status: "answered"` and `answered_question_ids`.
+- `200` with `status: "answered"`, `answered_question_ids`, and `skipped_question_ids`.
 
 Validation error:
 

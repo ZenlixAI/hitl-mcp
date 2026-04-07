@@ -114,6 +114,7 @@ export class RedisHitlRepository implements HitlRepository {
   async finalizeAnswers(
     groupId: string,
     answers: Record<string, unknown>,
+    skippedQuestionIds: string[] = [],
     idempotencyKey?: string
   ): Promise<FinalizeResult> {
     const idemKey = idempotencyKey ? redisKeys.idem(this.prefix, 'finalize', idempotencyKey) : null;
@@ -132,12 +133,14 @@ export class RedisHitlRepository implements HitlRepository {
       ...group,
       status: 'answered',
       answers,
+      skipped_question_ids: skippedQuestionIds,
       updated_at: answeredAt
     };
 
     const result: FinalizeResult = {
       status: 'answered',
       answered_question_ids: Object.keys(answers),
+      skipped_question_ids: skippedQuestionIds,
       answered_at: answeredAt
     };
 
@@ -145,7 +148,7 @@ export class RedisHitlRepository implements HitlRepository {
     tx.set(redisKeys.qg(this.prefix, groupId), JSON.stringify(nextGroup), 'EX', this.ttlSeconds);
     tx.set(
       redisKeys.ans(this.prefix, groupId),
-      JSON.stringify({ answers, finalized_at: answeredAt }),
+      JSON.stringify({ answers, skipped_question_ids: skippedQuestionIds, finalized_at: answeredAt }),
       'EX',
       this.ttlSeconds
     );

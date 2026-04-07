@@ -21,6 +21,7 @@ export type ScopedQuestionGroup = CallerScope & {
   created_at: string;
   updated_at: string;
   answers?: Record<string, unknown>;
+  skipped_question_ids?: string[];
   idempotency_key?: string;
   extra?: Record<string, unknown>;
 };

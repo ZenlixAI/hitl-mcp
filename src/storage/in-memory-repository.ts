@@ -99,6 +99,7 @@ export class InMemoryHitlRepository implements HitlRepository {
   async finalizeAnswers(
     groupId: string,
     answers: Record<string, unknown>,
+    skippedQuestionIds: string[] = [],
     idempotencyKey?: string
   ): Promise<FinalizeResult> {
     if (idempotencyKey) {
@@ -113,12 +114,14 @@ export class InMemoryHitlRepository implements HitlRepository {
     const answeredAt = new Date().toISOString();
     group.status = 'answered';
     group.answers = answers;
+    group.skipped_question_ids = skippedQuestionIds;
     group.updated_at = answeredAt;
     this.pendingByScope.delete(this.scopeKey(group.agent_identity, group.agent_session_id));
 
     const result: FinalizeResult = {
       status: 'answered',
       answered_question_ids: Object.keys(answers),
+      skipped_question_ids: skippedQuestionIds,
       answered_at: answeredAt
     };
 

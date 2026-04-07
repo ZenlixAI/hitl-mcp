@@ -100,6 +100,7 @@ export const waitQuestionGroupInputSchema = z
 export const finalizeAnswersSchema = z.object({
   idempotency_key: z.string().optional(),
   answers: z.record(z.string(), z.object({ value: z.any() })),
+  skipped_question_ids: z.array(z.string().min(1)).optional(),
   finalized_by: z.string().optional(),
   extra: z.record(z.string(), z.any()).optional()
 });

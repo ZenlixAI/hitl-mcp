@@ -143,7 +143,7 @@ MCP 工具面被明确拆成：
 
 ### 5) 校验与幂等
 
-finalize 支持类型/范围校验与必答校验；create/finalize 都可通过 `idempotency_key` 实现幂等。
+finalize 支持类型/范围校验与必答校验；可选题若不回答，必须显式放入 `skipped_question_ids`。create/finalize 都可通过 `idempotency_key` 实现幂等。
 
 ### 6) 存储策略
 
@@ -478,6 +478,7 @@ curl -X PUT "http://localhost:3000/api/v1/question-groups/<question_group_id>/an
   "answers": {
     "q_1": { "value": "A" }
   },
+  "skipped_question_ids": ["q_optional_1"],
   "finalized_by": "agent-server",
   "extra": {}
 }
@@ -486,12 +487,13 @@ curl -X PUT "http://localhost:3000/api/v1/question-groups/<question_group_id>/an
 行为：
 
 - 进行类型/范围/必答校验。
+- 可选题必须“回答或显式忽略（`skipped_question_ids`）”。
 - 若不合法：保持 `pending`。
 - 若合法：切换到 `answered` 并唤醒阻塞的 MCP wait 调用。
 
 成功：
 
-- `200`，包含 `status: "answered"` 与 `answered_question_ids`。
+- `200`，包含 `status: "answered"`、`answered_question_ids` 与 `skipped_question_ids`。
 
 校验失败：
 

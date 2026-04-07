@@ -25,12 +25,14 @@ describe('idempotency', () => {
     const first = await repository.finalizeAnswers(
       created.question_group_id,
       { q_1: { value: 'A' } },
+      [],
       'idem-1'
     );
 
     const second = await repository.finalizeAnswers(
       created.question_group_id,
       { q_1: { value: 'B' } },
+      [],
       'idem-1'
     );
 

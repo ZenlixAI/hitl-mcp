@@ -60,6 +60,7 @@
   "answers": {
     "q_1": { "value": "A" }
   },
+  "skipped_question_ids": ["q_optional_1"],
   "finalized_by": "agent-server",
   "extra": {}
 }
@@ -68,6 +69,9 @@
 错误：
 - `404 QUESTION_GROUP_NOT_FOUND`
 - `422 ANSWER_VALIDATION_FAILED`
+
+说明：
+- 可选题必须“回答或显式忽略（`skipped_question_ids`）”。
 
 成功时将 pending 问题组切到 `answered`，并唤醒对应等待调用。
 

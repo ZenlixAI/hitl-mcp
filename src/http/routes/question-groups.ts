@@ -46,6 +46,9 @@ export function questionGroupRoutes(deps: {
     const requestId = c.get('requestId') ?? 'local';
     const groupId = c.req.param('questionGroupId');
     const body = await c.req.json();
+    const skippedQuestionIds = Array.isArray(body.skipped_question_ids)
+      ? body.skipped_question_ids.filter((item: unknown): item is string => typeof item === 'string')
+      : [];
 
     const group = await deps.repository.getGroup(groupId);
     if (!group) {
@@ -57,7 +60,8 @@ export function questionGroupRoutes(deps: {
 
     const validation = validateAnswerSet(
       (group.questions as any[]) ?? [],
-      (body.answers ?? {}) as Record<string, { value: unknown }>
+      (body.answers ?? {}) as Record<string, { value: unknown }>,
+      skippedQuestionIds
     );
 
     if (!validation.ok) {
@@ -74,13 +78,19 @@ export function questionGroupRoutes(deps: {
       );
     }
 
-    const saved = await deps.repository.finalizeAnswers(groupId, body.answers ?? {}, body.idempotency_key);
+    const saved = await deps.repository.finalizeAnswers(
+      groupId,
+      body.answers ?? {},
+      skippedQuestionIds,
+      body.idempotency_key
+    );
     deps.metrics?.incFinalizeSuccess();
 
     deps.waiter.notify(groupId, {
       question_group_id: groupId,
       status: 'answered',
       answers: body.answers ?? {},
+      skipped_question_ids: skippedQuestionIds,
       answered_at: saved.answered_at
     });
 
@@ -89,6 +99,7 @@ export function questionGroupRoutes(deps: {
         question_group_id: groupId,
         status: 'answered',
         answered_question_ids: saved.answered_question_ids,
+        skipped_question_ids: saved.skipped_question_ids,
         answered_at: saved.answered_at
       })
     );
