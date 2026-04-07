@@ -48,6 +48,7 @@ This means the agent should never invent the group ID itself and should treat ca
 - Never call the old `hitl_ask_question_group`; it is obsolete in this project.
 - Never generate `question_group_id` on the agent side.
 - Keep `question_id` stable and unique within the question group you send.
+- For optional questions (`required: false`), design UX with an explicit "skip/ignore" action.
 - Treat create and wait as separate actions; create does not block.
 - Treat terminal states as final; do not expect a group to revert to `pending`.
 - Remember that the current caller scope may already own a pending group; avoid accidentally creating a second one.
@@ -108,9 +109,19 @@ Full schema and constraints: `docs/api/mcp-tools.md`.
   "status": "answered",
   "answers": {
     "q_canary": { "value": "yes" }
-  }
+  },
+  "skipped_question_ids": []
 }
 ```
+
+## Optional Question Skip Rule
+- The finalize API now enforces explicit handling for optional questions.
+- Optional questions must be either:
+  - answered in `answers`, or
+  - explicitly listed in `skipped_question_ids`.
+- Required questions cannot be listed in `skipped_question_ids`.
+
+If your human UI allows "leave blank", map that action to an explicit skip and include that `question_id` in `skipped_question_ids` during finalize.
 
 ## Common Mistakes
 - Calling the removed `hitl_ask_question_group`
@@ -119,3 +130,4 @@ Full schema and constraints: `docs/api/mcp-tools.md`.
 - Forgetting that caller scope comes from authentication plus session header, not tool input
 - Creating another group when the same caller scope already has a pending one
 - Treating `cancelled` or `expired` as recoverable
+- Sending finalize payload without `skipped_question_ids` when optional questions are unanswered
