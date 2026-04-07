@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { createRuntime } from '../../src/server/create-server';
 
 describe('idempotency', () => {
-  it('returns same result for duplicated finalize idempotency key', async () => {
+  it('returns same result for duplicated submit idempotency key', async () => {
     const { repository } = await createRuntime();
 
     const created = await repository.createPendingGroup({
@@ -21,16 +21,24 @@ describe('idempotency', () => {
         }
       ]
     });
+    const questionId = String(created.questions[0].question_id);
 
-    const first = await repository.finalizeAnswers(
-      created.question_group_id,
-      { q_1: { value: 'A' } },
+    const caller = {
+      agent_identity: 'api_key:test-agent',
+      agent_session_id: 'session-idem-1'
+    };
+
+    const first = await repository.submitAnswers(
+      caller,
+      { [questionId]: { value: 'A' } },
+      [],
       'idem-1'
     );
 
-    const second = await repository.finalizeAnswers(
-      created.question_group_id,
-      { q_1: { value: 'B' } },
+    const second = await repository.submitAnswers(
+      caller,
+      { [questionId]: { value: 'B' } },
+      [],
       'idem-1'
     );
 

@@ -1,71 +1,139 @@
-# MCP Tools Contract
+# MCP Tools
 
-## 1) `hitl_create_question_group`
+## `hitl_ask`
 
-输入：
-- `title` (string)
-- `description?` (string)
-- `tags?` (string[])
-- `extra?` (object)
-- `ttl_seconds?` (number)
-- `questions` (Question[])
-- `idempotency_key?` (string)
+Create one or more pending questions for the current caller scope.
 
-行为：
-- 从连接认证推导 `agent_identity`
-- 从连接 header `x-agent-session-id` 推导 `agent_session_id`
-- 生成服务端 `question_group_id`
-- 持久化问题组并置为 `pending`
+Input questions must not include `question_id`. The server generates it.
 
-输出：
-- `question_group_id`
-- `status`
-- 完整 pending 问题组对象
+Input:
 
-## 2) `hitl_wait_question_group`
+```json
+{
+  "title": "Release Decision",
+  "questions": [
+    {
+      "type": "single_choice",
+      "title": "Can we start canary deployment?",
+      "options": [
+        { "value": "yes", "label": "Yes" },
+        { "value": "no", "label": "No" }
+      ]
+    }
+  ]
+}
+```
 
-输入：
-- `question_group_id?` (string)
+Output:
 
-行为：
-- 如果传入 `question_group_id`，等待该问题组进入终态
-- 如果未传入，则等待当前调用方作用域下唯一的 pending 问题组
+```json
+{
+  "questions": [
+    {
+      "question_id": "q_01JXYZ...",
+      "status": "pending"
+    }
+  ]
+}
+```
 
-输出：
-- `answered`: 返回最终答案
-- `cancelled` / `expired`: 返回终态信息
+## `hitl_wait`
 
-## 3) `hitl_get_current_question_group`
+Wait on the current caller scope.
 
-输入：
-- 无
+- `terminal_only`: return only when no pending questions remain
+- `progressive`: return after each state change
 
-输出：
-- 当前调用方作用域下的 pending 问题组
+Input:
 
-## 4) `hitl_get_question_group_status`
+```json
+{}
+```
 
-输入：
-- `question_group_id`
+Possible output:
 
-输出：
-- `question_group_id`
-- `status`
-- `updated_at`
+```json
+{
+  "status": "in_progress",
+  "is_terminal": false,
+  "changed_question_ids": ["q_canary"],
+  "pending_questions": [],
+  "answered_question_ids": ["q_canary"],
+  "skipped_question_ids": [],
+  "cancelled_question_ids": [],
+  "is_complete": true
+}
+```
 
-## 5) `hitl_get_question`
+## `hitl_get_pending_questions`
 
-输入：
-- `question_id`
+Get all pending questions for the current caller scope.
 
-输出：
-- 题目完整定义
+Output:
 
-## 6) `hitl_cancel_question_group`
+```json
+{
+  "pending_questions": [
+    {
+      "question_id": "q_01JXYZ...",
+      "status": "pending"
+    }
+  ]
+}
+```
 
-输入：
-- `question_group_id`
-- `reason?`
+## `hitl_submit_answers`
 
-输出：
-- 取消结果
+Submit newly answered or skipped questions.
+
+Input:
+
+```json
+{
+  "answers": {
+    "q_01JXYZ...": { "value": "yes" }
+  },
+  "skipped_question_ids": ["q_01JABC..."],
+  "idempotency_key": "idem-1"
+}
+```
+
+Output:
+
+```json
+{
+  "status": "completed",
+  "is_terminal": true,
+  "changed_question_ids": ["q_01JXYZ...", "q_01JABC..."],
+  "pending_questions": [],
+  "answered_question_ids": ["q_01JXYZ..."],
+  "skipped_question_ids": ["q_01JABC..."],
+  "cancelled_question_ids": [],
+  "is_complete": true
+}
+```
+
+## `hitl_cancel_questions`
+
+Cancel a subset of pending questions or all pending questions in scope.
+
+Input:
+
+```json
+{
+  "question_ids": ["q_01JXYZ..."],
+  "reason": "no longer needed"
+}
+```
+
+Or:
+
+```json
+{
+  "cancel_all": true
+}
+```
+
+## `hitl_get_question`
+
+Fetch one question by `question_id`.

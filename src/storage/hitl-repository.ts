@@ -1,9 +1,14 @@
-import type { ScopedQuestionGroup } from '../domain/types';
+import type { CallerScope, ScopeQuestionSnapshot, ScopedQuestionGroup } from '../domain/types';
 
 export interface FinalizeResult {
-  status: 'answered';
+  status: 'answered' | 'in_progress';
   answered_question_ids: string[];
-  answered_at: string;
+  skipped_question_ids: string[];
+  cancelled_question_ids?: string[];
+  pending_questions?: Array<Record<string, unknown>>;
+  changed_question_ids?: string[];
+  answered_at?: string;
+  is_complete?: boolean;
 }
 
 export interface CreatePendingGroupInput {
@@ -22,6 +27,9 @@ export interface HitlRepository {
   createPendingGroup(input: CreatePendingGroupInput): Promise<ScopedQuestionGroup>;
   getGroup(groupId: string): Promise<ScopedQuestionGroup | null>;
   getPendingGroupByScope(agentIdentity: string, agentSessionId: string): Promise<ScopedQuestionGroup | null>;
+  getPendingGroupsByScope(agentIdentity: string, agentSessionId: string): Promise<ScopedQuestionGroup[]>;
+  getPendingQuestionsByScope(agentIdentity: string, agentSessionId: string): Promise<Array<Record<string, unknown>>>;
+  getScopeSnapshot(caller: CallerScope, changedQuestionIds?: string[]): Promise<ScopeQuestionSnapshot>;
   getGroupByCreateIdempotency(
     agentIdentity: string,
     agentSessionId: string,
@@ -29,7 +37,17 @@ export interface HitlRepository {
   ): Promise<ScopedQuestionGroup | null>;
   getQuestion(questionId: string): Promise<Record<string, unknown> | null>;
   getGroupStatus(groupId: string): Promise<Record<string, unknown> | null>;
-  finalizeAnswers(groupId: string, answers: Record<string, unknown>, idempotencyKey?: string): Promise<FinalizeResult>;
-  cancelGroup(groupId: string, reason?: string): Promise<{ status: 'cancelled'; reason?: string }>;
+  submitAnswers(
+    caller: CallerScope,
+    answers: Record<string, unknown>,
+    skippedQuestionIds?: string[],
+    idempotencyKey?: string
+  ): Promise<FinalizeResult>;
+  cancelQuestions(
+    caller: CallerScope,
+    questionIds?: string[],
+    cancelAll?: boolean,
+    reason?: string
+  ): Promise<ScopeQuestionSnapshot & { status: 'cancelled' }>;
   expireGroup(groupId: string, reason?: string): Promise<{ status: 'expired'; reason?: string }>;
 }

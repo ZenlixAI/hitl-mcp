@@ -12,23 +12,72 @@ export type ValidationResult =
 
 export function validateAnswerSet(
   questions: Question[],
-  answers: Record<string, { value: unknown }>
+  answers: Record<string, { value: unknown }>,
+  skippedQuestionIds: string[] = []
 ): ValidationResult {
   const errors: ValidationError[] = [];
+  const questionById = new Map(questions.map((question) => [question.question_id, question]));
+  const skippedSet = new Set(skippedQuestionIds);
 
-  for (const question of questions) {
-    const answer = answers[question.question_id];
-
-    if (!answer) {
-      if (question.required !== false) {
-        errors.push({
-          question_id: question.question_id,
-          reason: '必答题未回答',
-          expected: 'value present'
-        });
-      }
+  for (const skippedId of skippedSet) {
+    const question = questionById.get(skippedId);
+    if (!question) {
+      errors.push({
+        question_id: skippedId,
+        reason: '忽略的问题不存在',
+        expected: 'known question_id'
+      });
       continue;
     }
+    if (question.required !== false) {
+      errors.push({
+        question_id: skippedId,
+        reason: '必答题不能忽略',
+        expected: 'required=false'
+      });
+    }
+  }
+
+  for (const questionId of Object.keys(answers)) {
+    if (!questionById.has(questionId)) {
+      errors.push({
+        question_id: questionId,
+        reason: '答案对应的问题不存在',
+        expected: 'known question_id'
+      });
+    }
+  }
+
+  const touchedQuestionIds = new Set([
+    ...Object.keys(answers),
+    ...skippedQuestionIds
+  ]);
+
+  for (const question of questions) {
+    if (!touchedQuestionIds.has(question.question_id)) continue;
+
+    const answer = answers[question.question_id];
+    const skipped = skippedSet.has(question.question_id);
+
+    if (answer && skipped) {
+      errors.push({
+        question_id: question.question_id,
+        reason: '问题不能同时回答和忽略',
+        expected: 'answered xor skipped'
+      });
+      continue;
+    }
+
+    if (!answer && !skipped) {
+      errors.push({
+        question_id: question.question_id,
+        reason: '问题更新必须包含答案或忽略标记',
+        expected: 'answer present or skipped'
+      });
+      continue;
+    }
+
+    if (skipped) continue;
 
     if (question.type === 'single_choice') {
       if (

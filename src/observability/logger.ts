@@ -10,6 +10,22 @@ const priority: Record<LogLevel, number> = {
 export class Logger {
   constructor(private readonly level: LogLevel = 'info') {}
 
+  private normalize(fields: Record<string, unknown>) {
+    const normalized: Record<string, unknown> = {};
+    for (const [key, value] of Object.entries(fields)) {
+      if (value instanceof Error) {
+        normalized[key] = {
+          name: value.name,
+          message: value.message,
+          stack: value.stack
+        };
+        continue;
+      }
+      normalized[key] = value;
+    }
+    return normalized;
+  }
+
   log(level: LogLevel, message: string, fields: Record<string, unknown> = {}) {
     if (priority[level] < priority[this.level]) return;
 
@@ -17,7 +33,7 @@ export class Logger {
       ts: new Date().toISOString(),
       level,
       message,
-      ...fields
+      ...this.normalize(fields)
     };
 
     // eslint-disable-next-line no-console

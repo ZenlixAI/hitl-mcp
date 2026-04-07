@@ -18,7 +18,6 @@ describe('redis repository', () => {
       title: 'group',
       questions: [
         {
-          question_id: 'q_redis_1',
           type: 'text',
           title: 'why'
         }
@@ -27,15 +26,16 @@ describe('redis repository', () => {
 
     const group = await repository.getGroup(created.question_group_id);
     const current = await repository.getPendingGroupByScope('api_key:a1', 'session-1');
-    const question = await repository.getQuestion('q_redis_1');
+    const generatedQuestionId = String(created.questions[0].question_id);
+    const question = await repository.getQuestion(generatedQuestionId);
 
     expect(created.question_group_id).toMatch(/^qg_/);
     expect(group?.question_group_id).toBe(created.question_group_id);
     expect(current?.question_group_id).toBe(created.question_group_id);
-    expect(question?.question_id).toBe('q_redis_1');
+    expect(question?.question_id).toBe(generatedQuestionId);
   });
 
-  it('supports create and finalize idempotency keys', async () => {
+  it('supports create and submit idempotency keys', async () => {
     const created = await repository.createPendingGroup({
       agent_identity: 'api_key:a1',
       agent_session_id: 'session-2',
@@ -43,7 +43,6 @@ describe('redis repository', () => {
       idempotency_key: 'create-idem-1',
       questions: [
         {
-          question_id: 'q_redis_2',
           type: 'single_choice',
           title: 'pick',
           options: [{ value: 'A', label: 'A' }]
@@ -57,7 +56,6 @@ describe('redis repository', () => {
       idempotency_key: 'create-idem-1',
       questions: [
         {
-          question_id: 'q_redis_2',
           type: 'single_choice',
           title: 'pick',
           options: [{ value: 'A', label: 'A' }]
@@ -65,14 +63,22 @@ describe('redis repository', () => {
       ]
     });
 
-    const first = await repository.finalizeAnswers(
-      created.question_group_id,
-      { q_redis_2: { value: 'A' } },
+    const caller = {
+      agent_identity: 'api_key:a1',
+      agent_session_id: 'session-2'
+    };
+    const generatedQuestionId = String(created.questions[0].question_id);
+
+    const first = await repository.submitAnswers(
+      caller,
+      { [generatedQuestionId]: { value: 'A' } },
+      [],
       'redis-idem-1'
     );
-    const second = await repository.finalizeAnswers(
-      created.question_group_id,
-      { q_redis_2: { value: 'B' } },
+    const second = await repository.submitAnswers(
+      caller,
+      { [generatedQuestionId]: { value: 'B' } },
+      [],
       'redis-idem-1'
     );
 

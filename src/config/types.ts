@@ -23,7 +23,8 @@ export const appConfigSchema = z.object({
     answeredRetentionSeconds: z.number().int().positive()
   }),
   pending: z.object({
-    maxWaitSeconds: z.number().int().nonnegative()
+    maxWaitSeconds: z.number().int().nonnegative(),
+    waitMode: z.enum(['terminal_only', 'progressive'])
   }),
   security: z.object({
     apiKey: z.string().min(1).optional()

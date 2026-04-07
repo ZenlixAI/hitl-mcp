@@ -1,30 +1,34 @@
 import { object, error, type MCPServer } from 'mcp-use/server';
-import { z } from 'zod';
+import { cancelQuestionsInputSchema } from '../../domain/schemas';
 import type { HitlService } from '../../core/hitl-service';
+import type { Logger } from '../../observability/logger';
+import { readCallerScopeFromMcpContext } from '../caller-scope';
 
-const schema = z.object({
-  question_group_id: z.string().min(1).describe('Question group id'),
-  reason: z.string().optional().describe('Optional cancel reason')
-});
-
-export function registerCancelQuestionGroupTool(server: MCPServer, service: HitlService) {
+export function registerCancelQuestionsTool(server: MCPServer, service: HitlService, logger: Logger) {
   server.tool(
     {
-      name: 'hitl_cancel_question_group',
-      description: 'Cancel a pending question group by question_group_id.',
-      schema,
+      name: 'hitl_cancel_questions',
+      description: 'Cancel pending questions for the current caller scope.',
+      schema: cancelQuestionsInputSchema,
       annotations: {
         destructiveHint: true,
         readOnlyHint: false,
         openWorldHint: false
       }
     },
-    async ({ question_group_id, reason }) => {
+    async (input, ctx) => {
       try {
-        const result = await service.cancelQuestionGroup(question_group_id, reason);
+        const result = await service.cancelQuestions({
+          caller: readCallerScopeFromMcpContext(ctx),
+          input
+        });
         return object(result);
       } catch (err) {
-        return error(err instanceof Error ? err.message : 'failed to cancel question group');
+        logger.warn('mcp_cancel_questions_failed', {
+          tool_name: 'hitl_cancel_questions',
+          error: err
+        });
+        return error(err instanceof Error ? err.message : 'failed to cancel questions');
       }
     }
   );

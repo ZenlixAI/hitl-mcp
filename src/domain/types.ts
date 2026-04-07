@@ -1,11 +1,13 @@
 import type { z } from 'zod';
-import type { askQuestionGroupInputSchema, createQuestionGroupInputSchema, questionSchema } from './schemas';
+import type { askQuestionSchema, askQuestionsInputSchema, questionSchema, submitAnswersInputSchema } from './schemas';
 
 export type Question = z.infer<typeof questionSchema>;
-export type QuestionGroupInput = z.infer<typeof askQuestionGroupInputSchema>;
-export type CreateQuestionGroupInput = z.infer<typeof createQuestionGroupInputSchema>;
+export type AskQuestion = z.infer<typeof askQuestionSchema>;
+export type AskQuestionsInput = z.infer<typeof askQuestionsInputSchema>;
+export type SubmitAnswersInput = z.infer<typeof submitAnswersInputSchema>;
 
 export type GroupStatus = 'pending' | 'answered' | 'cancelled' | 'expired';
+export type PublicQuestionStatus = 'pending' | 'answered' | 'skipped' | 'cancelled';
 
 export type CallerScope = {
   agent_identity: string;
@@ -21,6 +23,16 @@ export type ScopedQuestionGroup = CallerScope & {
   created_at: string;
   updated_at: string;
   answers?: Record<string, unknown>;
+  skipped_question_ids?: string[];
   idempotency_key?: string;
   extra?: Record<string, unknown>;
+};
+
+export type ScopeQuestionSnapshot = {
+  pending_questions: Array<Record<string, unknown>>;
+  answered_question_ids: string[];
+  skipped_question_ids: string[];
+  cancelled_question_ids: string[];
+  changed_question_ids: string[];
+  is_complete: boolean;
 };

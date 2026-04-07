@@ -1,87 +1,115 @@
-# HTTP API Contract
+# HTTP API
 
-统一响应：
+Response envelope:
 
 ```json
 {
-  "request_id": "uuid",
+  "request_id": "http-request-id",
   "success": true,
   "data": {},
   "error": null
 }
 ```
 
-## GET /api/v1/healthz
+## `GET /api/v1/healthz`
 
-返回健康状态。
+Health check.
 
-## GET /api/v1/readyz
+## `GET /api/v1/readyz`
 
-返回依赖就绪状态。
+Readiness check.
 
-## GET /api/v1/metrics
+## `GET /api/v1/metrics`
 
-返回服务指标快照。
+Metrics snapshot.
 
-## GET /api/v1/question-groups/current
+## `POST /api/v1/questions`
 
-按当前调用方作用域返回 pending 问题组。
+Create one or more pending questions for the current caller scope.
 
-要求：
-- `x-api-key`，当 `HITL_API_KEY` 配置时
+Input questions must not include `question_id`. The server generates it and returns it in the created question objects.
+
+Headers:
+
 - `x-agent-session-id`
+- `x-agent-identity` when HTTP auth is not enabled
+- `x-api-key` when `HITL_API_KEY` is enabled
 
-错误：
-- `404 PENDING_GROUP_NOT_FOUND`
-
-## GET /api/v1/question-groups/{question_group_id}
-
-按 `question_group_id` 查询问题组。
-
-错误：
-- `404 QUESTION_GROUP_NOT_FOUND`
-
-## GET /api/v1/questions/{question_id}
-
-按 `question_id` 查询题目。
-
-错误：
-- `404 QUESTION_NOT_FOUND`
-
-## PUT /api/v1/question-groups/{question_group_id}/answers/finalize
-
-提交最终答案。
-
-请求体：
+Body:
 
 ```json
 {
-  "idempotency_key": "idem-1",
-  "answers": {
-    "q_1": { "value": "A" }
-  },
-  "finalized_by": "agent-server",
-  "extra": {}
+  "title": "Release Decision",
+  "questions": [
+    {
+      "type": "single_choice",
+      "title": "Can we start canary deployment?",
+      "options": [
+        { "value": "yes", "label": "Yes" },
+        { "value": "no", "label": "No" }
+      ]
+    }
+  ]
 }
 ```
 
-错误：
-- `404 QUESTION_GROUP_NOT_FOUND`
+## `GET /api/v1/questions/pending`
+
+Return all pending questions in the current caller scope.
+
+## `POST /api/v1/questions/answers`
+
+Submit newly answered or skipped questions.
+
+Body:
+
+```json
+{
+  "answers": {
+    "q_01JXYZ...": { "value": "yes" }
+  },
+  "skipped_question_ids": ["q_01JABC..."],
+  "idempotency_key": "idem-1"
+}
+```
+
+Rules:
+
+- answers may contain any subset of pending questions
+- optional questions may be skipped explicitly
+- required questions cannot be skipped
+- progress is accumulated server-side
+
+Errors:
+
+- `422 QUESTION_NOT_FOUND`
 - `422 ANSWER_VALIDATION_FAILED`
 
-成功时将 pending 问题组切到 `answered`，并唤醒对应等待调用。
+## `POST /api/v1/questions/cancel`
 
-## POST /api/v1/question-groups/{question_group_id}/cancel
+Cancel pending questions in the current caller scope.
 
-取消问题组并唤醒等待调用。
+Body:
 
-## POST /api/v1/question-groups/{question_group_id}/expire
+```json
+{
+  "question_ids": ["q_01JXYZ..."],
+  "reason": "no longer needed"
+}
+```
 
-手动过期问题组并唤醒等待调用。
+Or:
 
-## 鉴权
+```json
+{
+  "cancel_all": true
+}
+```
 
-当环境变量 `HITL_API_KEY` 设置后，以下路径需要请求头 `x-api-key`：
+## `GET /api/v1/questions/:question_id`
 
-- `/api/v1/question-groups/*`
-- `/api/v1/questions/*`
+Fetch one question by `question_id`.
+
+Errors:
+
+- `404 QUESTION_NOT_FOUND`

@@ -1,22 +1,26 @@
 import { object, error, type MCPServer } from 'mcp-use/server';
 import { z } from 'zod';
 import type { HitlService } from '../../core/hitl-service';
+import type { Logger } from '../../observability/logger';
 import { readCallerScopeFromMcpContext } from '../caller-scope';
 
-export function registerGetCurrentQuestionGroupTool(server: MCPServer, service: HitlService) {
+export function registerGetPendingQuestionsTool(server: MCPServer, service: HitlService, logger: Logger) {
   server.tool(
     {
-      name: 'hitl_get_current_question_group',
-      description: 'Get the current pending question group for the caller scope.',
+      name: 'hitl_get_pending_questions',
+      description: 'Get all pending questions for the current caller scope.',
       schema: z.object({})
     },
     async (_input, ctx) => {
       try {
-        const result = await service.getCurrentQuestionGroup(readCallerScopeFromMcpContext(ctx));
-        if (!result) return error('PENDING_GROUP_NOT_FOUND');
-        return object(result);
+        const pendingQuestions = await service.getPendingQuestions(readCallerScopeFromMcpContext(ctx));
+        return object({ pending_questions: pendingQuestions });
       } catch (err) {
-        return error(err instanceof Error ? err.message : 'failed to get current question group');
+        logger.warn('mcp_get_pending_questions_failed', {
+          tool_name: 'hitl_get_pending_questions',
+          error: err
+        });
+        return error(err instanceof Error ? err.message : 'failed to get pending questions');
       }
     }
   );
