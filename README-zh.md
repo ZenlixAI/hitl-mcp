@@ -38,27 +38,27 @@
 在复杂 Agent 工作流中，直接用 assistant 文本提问存在天然问题：
 
 1. 缺少结构化输出，前端难以稳定渲染问题卡片。
-2. 缺少稳定的问题组与问题生命周期跟踪。
+2. 缺少稳定的请求与问题生命周期跟踪。
 3. 不利于“用户回答 -> 服务端后处理 -> 最终确认”的工程链路。
 
 传统的阻塞式单工具 HITL 方案对 Agent 平台也不够友好：
 
 1. Agent 自己持有本应由服务端拥有的标识符。
 2. 重连、重试、多 Session 下的作用域不清晰。
-3. client 难以在用户真正回答前稳定感知 `pending` 问题组。
+3. client 难以在用户真正回答前稳定感知 `pending` 请求。
 
 `hitl-mcp` 用服务端拥有的身份和生命周期模型解决这些问题：
 
 1. `agent_identity` 由 MCP 连接认证推导。
 2. `agent_session_id` 由稳定的连接级 header 推导，默认 `x-agent-session-id`。
-3. `question_group_id` 永远由服务端生成。
-4. 对同一个 `(agent_identity, agent_session_id)`，同时最多只有一个 `pending` 问题组。
+3. `request_id` 永远由服务端生成。
+4. 对同一个 `(agent_identity, agent_session_id)`，同时最多只有一个 `pending` 请求。
 
 ## 项目目标
 
-- 永远以 **Question Group** 发问，不支持裸问题。
-- 让问题组主键和生命周期归服务端所有。
-- 让 Agent 平台在用户最终回答前就能观察到 `pending` 问题组。
+- 永远以 **Request** 发问，不支持裸问题。
+- 让请求主键和生命周期归服务端所有。
+- 让 Agent 平台在用户最终回答前就能观察到 `pending` 请求。
 - 支持题型：
   - `single_choice`
   - `multi_choice`
@@ -66,7 +66,7 @@
   - `boolean`
   - `range`
 - 支持必答（默认）与可选。
-- group/question 均支持 `tags` 与 `extra`。
+- request/question 均支持 `tags` 与 `extra`。
 - HTTP API 采用“按 ID 操作”模型。
 - 使用 KV（Redis）做持久化与 TTL。
 
@@ -76,34 +76,34 @@
 
 通过 MCP 工具完成创建、等待与查询：
 
-- `hitl_create_question_group`
-- `hitl_wait_question_group`
-- `hitl_get_current_question_group`
-- `hitl_get_question_group_status`
+- `hitl_create_request`
+- `hitl_wait_request`
+- `hitl_get_current_request`
+- `hitl_get_request_status`
 - `hitl_get_question`
-- `hitl_cancel_question_group`
+- `hitl_cancel_request`
 
-你的 Agent 不需要自己生成问题组 ID，也不需要发明额外的 pending 协议。
+你的 Agent 不需要自己生成请求 ID，也不需要发明额外的 pending 协议。
 
 ### 开发者（后端服务）
 
 通过 HTTP 控制面提交最终答案与管理状态：
 
-- `PUT /api/v1/question-groups/{id}/answers/finalize`
-- `POST /api/v1/question-groups/{id}/cancel`
-- `POST /api/v1/question-groups/{id}/expire`
-- `GET /api/v1/question-groups/current`
-- `GET /api/v1/question-groups/{id}`
+- `PUT /api/v1/requests/{id}/answers/finalize`
+- `POST /api/v1/requests/{id}/cancel`
+- `POST /api/v1/requests/{id}/expire`
+- `GET /api/v1/requests/current`
+- `GET /api/v1/requests/{id}`
 - `GET /api/v1/questions/{id}`
 
 不提供 list API（设计使然）。
 
 ## 端到端流程
 
-1. Agent 调用 `hitl_create_question_group` 发出结构化问题组。
-2. 服务端认证调用方，读取 `x-agent-session-id`，生成 `question_group_id`，并落为 `pending`。
-3. client 或后端立即拿到返回的 `question_group_id`，可以感知和展示 pending 状态。
-4. 当需要阻塞等待时，Agent 调用 `hitl_wait_question_group`。
+1. Agent 调用 `hitl_create_request` 发出结构化请求。
+2. 服务端认证调用方，读取 `x-agent-session-id`，生成 `request_id`，并落为 `pending`。
+3. client 或后端立即拿到返回的 `request_id`，可以感知和展示 pending 状态。
+4. 当需要阻塞等待时，Agent 调用 `hitl_wait_request`。
 5. 用户在客户端完成回答。
 6. 你的后端对回答做业务后处理。
 7. 后端调用 `answers/finalize` 提交最终答案。
@@ -114,9 +114,9 @@
 
 ## 关键设计决策
 
-### 1) 服务端生成 Question Group ID
+### 1) 服务端生成 Request ID
 
-`question_group_id` 不允许由 Agent 提供，确保对象主键和生命周期权限归服务端所有。
+`request_id` 不允许由 Agent 提供，确保对象主键和生命周期权限归服务端所有。
 
 ### 2) 稳定的调用方作用域
 
@@ -131,13 +131,13 @@
 
 MCP 工具面被明确拆成：
 
-- `create`：创建 `pending` 问题组并立即返回
+- `create`：创建 `pending` 请求并立即返回
 - `wait`：仅在 Agent 需要阻塞语义时才等待
 - `get_current`：用于按调用方作用域恢复当前 pending 状态
 
 ### 4) 每个调用方作用域只允许一个 Pending
 
-对同一个 `(agent_identity, agent_session_id)`，同时最多存在一个 `pending` 问题组。
+对同一个 `(agent_identity, agent_session_id)`，同时最多存在一个 `pending` 请求。
 
 这让 client 侧 pending 状态保持确定性。
 
@@ -219,9 +219,9 @@ npm run test
 
 ## 使用示例
 
-### Agent 调用 MCP 创建问题组
+### Agent 调用 MCP 创建请求
 
-工具：`hitl_create_question_group`
+工具：`hitl_create_request`
 
 ```json
 {
@@ -240,9 +240,9 @@ npm run test
 }
 ```
 
-### Agent 等待当前 Pending 问题组
+### Agent 等待当前 Pending 请求
 
-工具：`hitl_wait_question_group`
+工具：`hitl_wait_request`
 
 ```json
 {}
@@ -251,7 +251,7 @@ npm run test
 ### 服务端 finalize
 
 ```bash
-curl -X PUT "http://localhost:3000/api/v1/question-groups/<question_group_id>/answers/finalize" \
+curl -X PUT "http://localhost:3000/api/v1/requests/<request_id>/answers/finalize" \
   -H "Content-Type: application/json" \
   -H "x-api-key: ${HITL_API_KEY}" \
   -d '{
@@ -265,11 +265,11 @@ curl -X PUT "http://localhost:3000/api/v1/question-groups/<question_group_id>/an
 
 ## MCP 工具说明
 
-### `hitl_create_question_group`
+### `hitl_create_request`
 
 用途：
 
-- 为当前认证调用方作用域创建一个 `pending` 问题组，并立即返回。
+- 为当前认证调用方作用域创建一个 `pending` 请求，并立即返回。
 
 输入（关键字段）：
 
@@ -288,25 +288,25 @@ curl -X PUT "http://localhost:3000/api/v1/question-groups/<question_group_id>/an
 
 输出：
 
-- 服务端生成的 `question_group_id`
+- 服务端生成的 `request_id`
 - `status: "pending"`
 - 调用方作用域字段
-- 时间戳与问题组载荷
+- 时间戳与请求载荷
 
-### `hitl_wait_question_group`
+### `hitl_wait_request`
 
 用途：
 
-- 等待问题组进入终态（`answered`、`cancelled`、`expired`）。
+- 等待请求进入终态（`answered`、`cancelled`、`expired`）。
 
 输入：
 
-- `question_group_id`（string，可选）
+- `request_id`（string，可选）
 
 行为：
 
-- 传 `question_group_id` 时，等待指定问题组。
-- 不传时，等待当前调用方作用域下唯一的 pending 问题组。
+- 传 `request_id` 时，等待指定请求。
+- 不传时，等待当前调用方作用域下唯一的 pending 请求。
 
 输出：
 
@@ -319,30 +319,30 @@ curl -X PUT "http://localhost:3000/api/v1/question-groups/<question_group_id>/an
 - 该工具是阻塞式设计。
 - 当 `HITL_PENDING_MAX_WAIT_SECONDS=0` 时，为无限等待。
 
-### `hitl_get_current_question_group`
+### `hitl_get_current_request`
 
 用途：
 
-- 返回当前调用方作用域下的 pending 问题组。
+- 返回当前调用方作用域下的 pending 请求。
 
 输出：
 
-- 存在时返回完整 pending 问题组对象。
-- 不存在时返回 `PENDING_GROUP_NOT_FOUND`。
+- 存在时返回完整 pending 请求对象。
+- 不存在时返回 `PENDING_REQUEST_NOT_FOUND`。
 
-### `hitl_get_question_group_status`
+### `hitl_get_request_status`
 
 用途：
 
-- 按 ID 查询问题组生命周期状态。
+- 按 ID 查询请求生命周期状态。
 
 输入：
 
-- `question_group_id`（string）
+- `request_id`（string）
 
 输出：
 
-- `question_group_id`
+- `request_id`
 - `status`（`pending|answered|cancelled|expired`）
 - `updated_at`
 
@@ -360,15 +360,15 @@ curl -X PUT "http://localhost:3000/api/v1/question-groups/<question_group_id>/an
 
 - 题目完整对象。
 
-### `hitl_cancel_question_group`
+### `hitl_cancel_request`
 
 用途：
 
-- 取消 pending 问题组，并唤醒阻塞中的 wait 调用。
+- 取消 pending 请求，并唤醒阻塞中的 wait 调用。
 
 输入：
 
-- `question_group_id`（string）
+- `request_id`（string）
 - `reason`（string，可选）
 
 输出：
@@ -427,11 +427,11 @@ curl -X PUT "http://localhost:3000/api/v1/question-groups/<question_group_id>/an
 - `gauges.pending_count`
 - `histograms.wait_duration_ms`（count/min/max/avg）
 
-### `GET /question-groups/current`
+### `GET /requests/current`
 
 用途：
 
-- 按已认证调用方作用域查询当前 pending 问题组。
+- 按已认证调用方作用域查询当前 pending 请求。
 
 请求头：
 
@@ -442,17 +442,17 @@ curl -X PUT "http://localhost:3000/api/v1/question-groups/<question_group_id>/an
 
 - `401 UNAUTHORIZED`
 - `400 AGENT_SESSION_ID_REQUIRED`
-- `404 PENDING_GROUP_NOT_FOUND`
+- `404 PENDING_REQUEST_NOT_FOUND`
 
-### `GET /question-groups/{question_group_id}`
+### `GET /requests/{request_id}`
 
 用途：
 
-- 按 `question_group_id` 查询问题组。
+- 按 `request_id` 查询请求。
 
 错误：
 
-- `404 QUESTION_GROUP_NOT_FOUND`
+- `404 REQUEST_NOT_FOUND`
 
 ### `GET /questions/{question_id}`
 
@@ -464,7 +464,7 @@ curl -X PUT "http://localhost:3000/api/v1/question-groups/<question_group_id>/an
 
 - `404 QUESTION_NOT_FOUND`
 
-### `PUT /question-groups/{question_group_id}/answers/finalize`
+### `PUT /requests/{request_id}/answers/finalize`
 
 用途：
 
@@ -503,22 +503,22 @@ curl -X PUT "http://localhost:3000/api/v1/question-groups/<question_group_id>/an
 
 - 复用相同 `idempotency_key` 应返回同一 finalize 结果。
 
-### `POST /question-groups/{question_group_id}/cancel`
+### `POST /requests/{request_id}/cancel`
 
 用途：
 
-- 取消 pending 问题组。
+- 取消 pending 请求。
 
 行为：
 
 - 状态置为 `cancelled`。
 - 唤醒阻塞中的 MCP wait 调用（终态返回）。
 
-### `POST /question-groups/{question_group_id}/expire`
+### `POST /requests/{request_id}/expire`
 
 用途：
 
-- 强制使问题组过期。
+- 强制使请求过期。
 
 行为：
 
@@ -534,9 +534,9 @@ curl -X PUT "http://localhost:3000/api/v1/question-groups/<question_group_id>/an
 
 ### 常见错误码
 
-- `QUESTION_GROUP_NOT_FOUND`（`404`）
+- `REQUEST_NOT_FOUND`（`404`）
 - `QUESTION_NOT_FOUND`（`404`）
-- `PENDING_GROUP_NOT_FOUND`（`404`）
+- `PENDING_REQUEST_NOT_FOUND`（`404`）
 - `AGENT_IDENTITY_REQUIRED`（`401`）
 - `AGENT_SESSION_ID_REQUIRED`（`400`）
 - `ANSWER_VALIDATION_FAILED`（`422`）

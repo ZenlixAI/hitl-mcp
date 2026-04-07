@@ -6,17 +6,18 @@ import { readCallerScopeFromMcpContext } from '../caller-scope';
 export function registerGetCurrentQuestionGroupTool(server: MCPServer, service: HitlService) {
   server.tool(
     {
-      name: 'hitl_get_current_question_group',
-      description: 'Get the current pending question group for the caller scope.',
+      name: 'hitl_get_current_request',
+      description: 'Get the current pending request for the caller scope.',
       schema: z.object({})
     },
     async (_input, ctx) => {
       try {
-        const result = await service.getCurrentQuestionGroup(readCallerScopeFromMcpContext(ctx));
-        if (!result) return error('PENDING_GROUP_NOT_FOUND');
-        return object(result);
+        const result = await service.getCurrentRequest(readCallerScopeFromMcpContext(ctx));
+        if (!result) return error('PENDING_REQUEST_NOT_FOUND');
+        const { question_group_id, ...rest } = result as Record<string, unknown>;
+        return object({ ...rest, request_id: question_group_id });
       } catch (err) {
-        return error(err instanceof Error ? err.message : 'failed to get current question group');
+        return error(err instanceof Error ? err.message : 'failed to get current request');
       }
     }
   );

@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { createRuntime } from '../../src/server/create-server';
 
 describe('e2e pending to answered', () => {
-  it('creates pending group, waits, then resolves after finalize', async () => {
+  it('creates pending request, waits, then resolves after finalize', async () => {
     const { app, service } = await createRuntime();
 
     const caller = {
@@ -10,7 +10,7 @@ describe('e2e pending to answered', () => {
       agent_session_id: 'session-e2e-1'
     };
 
-    const created = await service.createQuestionGroup({
+    const created = await service.createRequest({
       caller,
       input: {
         title: 'Need user decision',
@@ -29,9 +29,9 @@ describe('e2e pending to answered', () => {
     });
     expect(created.status).toBe('pending');
 
-    const waitPromise = service.waitQuestionGroup({
+    const waitPromise = service.waitRequest({
       caller,
-      question_group_id: created.question_group_id
+      request_id: created.question_group_id
     });
 
     const pendingCheck = await Promise.race([
@@ -41,7 +41,7 @@ describe('e2e pending to answered', () => {
 
     expect(pendingCheck).toBe('pending');
 
-    const finalizeRes = await app.request(`/api/v1/question-groups/${created.question_group_id}/answers/finalize`, {
+    const finalizeRes = await app.request(`/api/v1/requests/${created.question_group_id}/answers/finalize`, {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({
@@ -55,6 +55,7 @@ describe('e2e pending to answered', () => {
 
     const finalPayload = await waitPromise;
     expect(finalPayload.status).toBe('answered');
+    expect(finalPayload.request_id).toBe(created.question_group_id);
     expect((finalPayload.answers as Record<string, { value: string }>).q_1.value).toBe('A');
   });
 });

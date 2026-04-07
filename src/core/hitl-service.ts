@@ -1,5 +1,5 @@
 import { DomainError } from '../domain/errors';
-import { createQuestionGroupInputSchema, waitQuestionGroupInputSchema } from '../domain/schemas';
+import { createRequestInputSchema, waitQuestionGroupInputSchema } from '../domain/schemas';
 import type { CallerScope } from '../domain/types';
 import type { HitlMetrics } from '../observability/metrics';
 import type { HitlRepository } from '../storage/hitl-repository';
@@ -13,11 +13,11 @@ export class HitlService {
     private readonly metrics?: HitlMetrics
   ) {}
 
-  async createQuestionGroup(params: {
+  async createRequest(params: {
     caller: CallerScope;
     input: unknown;
   }) {
-    const parsed = createQuestionGroupInputSchema.parse(params.input);
+    const parsed = createRequestInputSchema.parse(params.input);
     return this.repository.createPendingGroup({
       agent_identity: params.caller.agent_identity,
       agent_session_id: params.caller.agent_session_id,
@@ -25,30 +25,30 @@ export class HitlService {
     });
   }
 
-  async getCurrentQuestionGroup(caller: CallerScope) {
+  async getCurrentRequest(caller: CallerScope) {
     return this.repository.getPendingGroupByScope(caller.agent_identity, caller.agent_session_id);
   }
 
-  async waitQuestionGroup(params: {
+  async waitRequest(params: {
     caller: CallerScope;
-    question_group_id?: string;
+    request_id?: string;
   }) {
     const parsed = waitQuestionGroupInputSchema.parse({
-      question_group_id: params.question_group_id
+      request_id: params.request_id
     });
     const current =
-      parsed.question_group_id
+      parsed.request_id
         ? null
         : await this.repository.getPendingGroupByScope(
             params.caller.agent_identity,
             params.caller.agent_session_id
           );
-    const groupId = parsed.question_group_id ?? current?.question_group_id;
+    const groupId = parsed.request_id ?? current?.question_group_id;
 
     if (!groupId) {
       throw new DomainError(
-        'PENDING_GROUP_NOT_FOUND',
-        'no pending question group for caller scope'
+        'PENDING_REQUEST_NOT_FOUND',
+        'no pending request for caller scope'
       );
     }
 
@@ -64,25 +64,25 @@ export class HitlService {
     }
   }
 
-  async getQuestionGroupStatus(questionGroupId: string) {
-    return this.repository.getGroupStatus(questionGroupId);
+  async getRequestStatus(requestId: string) {
+    return this.repository.getGroupStatus(requestId);
   }
 
   async getQuestion(questionId: string) {
     return this.repository.getQuestion(questionId);
   }
 
-  async cancelQuestionGroup(questionGroupId: string, reason?: string) {
-    const result = await this.repository.cancelGroup(questionGroupId, reason);
-    this.waiter.notify(questionGroupId, {
-      question_group_id: questionGroupId,
+  async cancelRequest(requestId: string, reason?: string) {
+    const result = await this.repository.cancelGroup(requestId, reason);
+    this.waiter.notify(requestId, {
+      request_id: requestId,
       status: 'cancelled',
       reason
     });
     return result;
   }
 
-  notifyAnswered(questionGroupId: string, payload: Record<string, unknown>) {
-    this.waiter.notify(questionGroupId, payload);
+  notifyAnswered(requestId: string, payload: Record<string, unknown>) {
+    this.waiter.notify(requestId, payload);
   }
 }

@@ -79,7 +79,7 @@ export const askQuestionGroupInputSchema = z.object({
     .optional()
 });
 
-export const createQuestionGroupInputSchema = z
+export const createRequestInputSchema = z
   .object({
     title: z.string().min(1),
     description: z.string().optional(),
@@ -93,7 +93,7 @@ export const createQuestionGroupInputSchema = z
 
 export const waitQuestionGroupInputSchema = z
   .object({
-    question_group_id: z.string().min(1).optional()
+    request_id: z.string().min(1).optional()
   })
   .strict();
 

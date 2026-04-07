@@ -5,14 +5,22 @@ import type { HitlMetrics } from '../../observability/metrics';
 import type { HitlRepository } from '../../storage/hitl-repository';
 import type { Waiter } from '../../state/waiter';
 
-export function questionGroupRoutes(deps: {
+function toPublicRequestShape(input: Record<string, unknown>) {
+  const { question_group_id, ...rest } = input;
+  return {
+    ...rest,
+    request_id: question_group_id
+  };
+}
+
+export function requestRoutes(deps: {
   repository: HitlRepository;
   waiter: Waiter;
   metrics?: HitlMetrics;
 }) {
   const app = new Hono();
 
-  app.get('/question-groups/current', async (c) => {
+  app.get('/requests/current', async (c) => {
     const requestId = c.get('requestId') ?? 'local';
     const agentIdentity = c.get('agentIdentity');
     const agentSessionId = c.get('agentSessionId');
@@ -20,40 +28,40 @@ export function questionGroupRoutes(deps: {
 
     if (!group) {
       return c.json(
-        fail(requestId, 'PENDING_GROUP_NOT_FOUND', 'no pending group for current caller scope'),
+        fail(requestId, 'PENDING_REQUEST_NOT_FOUND', 'no pending request for current caller scope'),
         404
       );
     }
 
-    return c.json(ok(requestId, group));
+    return c.json(ok(requestId, toPublicRequestShape(group as unknown as Record<string, unknown>)));
   });
 
-  app.get('/question-groups/:questionGroupId', async (c) => {
+  app.get('/requests/:requestId', async (c) => {
     const requestId = c.get('requestId') ?? 'local';
-    const group = await deps.repository.getGroup(c.req.param('questionGroupId'));
+    const group = await deps.repository.getGroup(c.req.param('requestId'));
 
     if (!group) {
       return c.json(
-        fail(requestId, 'QUESTION_GROUP_NOT_FOUND', 'question group not found'),
+        fail(requestId, 'REQUEST_NOT_FOUND', 'request not found'),
         404
       );
     }
 
-    return c.json(ok(requestId, group));
+    return c.json(ok(requestId, toPublicRequestShape(group as unknown as Record<string, unknown>)));
   });
 
-  app.put('/question-groups/:questionGroupId/answers/finalize', async (c) => {
+  app.put('/requests/:requestId/answers/finalize', async (c) => {
     const requestId = c.get('requestId') ?? 'local';
-    const groupId = c.req.param('questionGroupId');
+    const internalId = c.req.param('requestId');
     const body = await c.req.json();
     const skippedQuestionIds = Array.isArray(body.skipped_question_ids)
       ? body.skipped_question_ids.filter((item: unknown): item is string => typeof item === 'string')
       : [];
 
-    const group = await deps.repository.getGroup(groupId);
+    const group = await deps.repository.getGroup(internalId);
     if (!group) {
       return c.json(
-        fail(requestId, 'QUESTION_GROUP_NOT_FOUND', 'question group not found'),
+        fail(requestId, 'REQUEST_NOT_FOUND', 'request not found'),
         404
       );
     }
@@ -72,22 +80,22 @@ export function questionGroupRoutes(deps: {
           'ANSWER_VALIDATION_FAILED',
           `${validation.errors.length} 个问题未通过校验，请修正后重试。`,
           validation.errors,
-          { question_group_id: groupId, status: 'pending' }
+          { request_id: internalId, status: 'pending' }
         ),
         422
       );
     }
 
     const saved = await deps.repository.finalizeAnswers(
-      groupId,
+      internalId,
       body.answers ?? {},
       skippedQuestionIds,
       body.idempotency_key
     );
     deps.metrics?.incFinalizeSuccess();
 
-    deps.waiter.notify(groupId, {
-      question_group_id: groupId,
+    deps.waiter.notify(internalId, {
+      request_id: internalId,
       status: 'answered',
       answers: body.answers ?? {},
       skipped_question_ids: skippedQuestionIds,
@@ -96,7 +104,7 @@ export function questionGroupRoutes(deps: {
 
     return c.json(
       ok(requestId, {
-        question_group_id: groupId,
+        request_id: internalId,
         status: 'answered',
         answered_question_ids: saved.answered_question_ids,
         skipped_question_ids: saved.skipped_question_ids,
@@ -105,25 +113,25 @@ export function questionGroupRoutes(deps: {
     );
   });
 
-  app.post('/question-groups/:questionGroupId/cancel', async (c) => {
+  app.post('/requests/:requestId/cancel', async (c) => {
     const requestId = c.get('requestId') ?? 'local';
-    const groupId = c.req.param('questionGroupId');
+    const internalId = c.req.param('requestId');
     const body = await c.req.json().catch(() => ({}));
-    const result = await deps.repository.cancelGroup(groupId, body.reason);
-    deps.waiter.notify(groupId, {
-      question_group_id: groupId,
+    const result = await deps.repository.cancelGroup(internalId, body.reason);
+    deps.waiter.notify(internalId, {
+      request_id: internalId,
       status: 'cancelled',
       reason: body.reason
     });
     return c.json(ok(requestId, result));
   });
 
-  app.post('/question-groups/:questionGroupId/expire', async (c) => {
+  app.post('/requests/:requestId/expire', async (c) => {
     const requestId = c.get('requestId') ?? 'local';
-    const groupId = c.req.param('questionGroupId');
-    const result = await deps.repository.expireGroup(groupId, 'manual expire');
-    deps.waiter.notify(groupId, {
-      question_group_id: groupId,
+    const internalId = c.req.param('requestId');
+    const result = await deps.repository.expireGroup(internalId, 'manual expire');
+    deps.waiter.notify(internalId, {
+      request_id: internalId,
       status: 'expired'
     });
     return c.json(ok(requestId, result));

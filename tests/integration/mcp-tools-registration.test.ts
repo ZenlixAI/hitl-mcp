@@ -6,8 +6,8 @@ describe('mcp tool registration', () => {
     const runtime = await createRuntime();
     const names = runtime.server.registeredTools.sort();
 
-    expect(names).toContain('hitl_create_question_group');
-    expect(names).toContain('hitl_wait_question_group');
-    expect(names).toContain('hitl_get_current_question_group');
+    expect(names).toContain('hitl_create_request');
+    expect(names).toContain('hitl_wait_request');
+    expect(names).toContain('hitl_get_current_request');
   });
 });

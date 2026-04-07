@@ -4,7 +4,7 @@ import { createHttpApp, createRuntime } from '../../src/server/create-server';
 describe('http finalize api', () => {
   it('returns 404 when group does not exist', async () => {
     const app = await createHttpApp();
-    const res = await app.request('/api/v1/question-groups/qg_missing/answers/finalize', {
+    const res = await app.request('/api/v1/requests/qg_missing/answers/finalize', {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ answers: { q_1: { value: 'A' } } })
@@ -12,7 +12,7 @@ describe('http finalize api', () => {
 
     expect(res.status).toBe(404);
     const body = await res.json();
-    expect(body.error.code).toBe('QUESTION_GROUP_NOT_FOUND');
+    expect(body.error.code).toBe('REQUEST_NOT_FOUND');
   });
 });
 
@@ -33,7 +33,7 @@ describe('http finalize validation', () => {
       ]
     });
 
-    const res = await runtime.app.request(`/api/v1/question-groups/${created.question_group_id}/answers/finalize`, {
+    const res = await runtime.app.request(`/api/v1/requests/${created.question_group_id}/answers/finalize`, {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ answers: { q_range_1: { value: 99 } } })
@@ -70,7 +70,7 @@ describe('http finalize validation', () => {
     });
 
     const withoutSkip = await runtime.app.request(
-      `/api/v1/question-groups/${created.question_group_id}/answers/finalize`,
+      `/api/v1/requests/${created.question_group_id}/answers/finalize`,
       {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },
@@ -85,7 +85,7 @@ describe('http finalize validation', () => {
     expect(withoutSkip.status).toBe(422);
 
     const withSkip = await runtime.app.request(
-      `/api/v1/question-groups/${created.question_group_id}/answers/finalize`,
+      `/api/v1/requests/${created.question_group_id}/answers/finalize`,
       {
         method: 'PUT',
         headers: { 'content-type': 'application/json' },

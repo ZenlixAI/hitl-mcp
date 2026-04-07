@@ -22,7 +22,7 @@ describe('readiness and metrics', () => {
       ]
     });
 
-    const finalize = await runtime.app.request(`/api/v1/question-groups/${created.question_group_id}/answers/finalize`, {
+    const finalize = await runtime.app.request(`/api/v1/requests/${created.question_group_id}/answers/finalize`, {
       method: 'PUT',
       headers: { 'content-type': 'application/json' },
       body: JSON.stringify({ answers: { q_range_1: { value: 99 } } })

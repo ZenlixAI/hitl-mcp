@@ -5,7 +5,7 @@ import { apiKeyAuth, resolveApiKeyPrincipal } from '../http/middleware/auth';
 import { requestContextMiddleware } from '../http/middleware/request-context';
 import { requestIdMiddleware } from '../http/middleware/request-id';
 import { questionRoutes } from '../http/routes/questions';
-import { questionGroupRoutes } from '../http/routes/question-groups';
+import { requestRoutes } from '../http/routes/requests';
 import { ok } from '../http/response';
 import { injectCallerScopeIntoMcpState } from '../mcp/caller-scope';
 import { registerHitlTools } from '../mcp/register-tools';
@@ -103,10 +103,10 @@ export async function createRuntime() {
         resolveAgentIdentity: (c) => c.get('agentIdentity') ?? resolveApiKeyPrincipal(c, apiKey)
       })
     );
-    app.use(`${config.http.apiPrefix}/question-groups/*`, apiKeyAuth(apiKey));
+    app.use(`${config.http.apiPrefix}/requests/*`, apiKeyAuth(apiKey));
     app.use(`${config.http.apiPrefix}/questions/*`, apiKeyAuth(apiKey));
     app.use(
-      `${config.http.apiPrefix}/question-groups/current`,
+      `${config.http.apiPrefix}/requests/current`,
       requestContextMiddleware({
         sessionHeader: config.agentIdentity.sessionHeader,
         resolveAgentIdentity: (c) => resolveApiKeyPrincipal(c, apiKey)
@@ -134,7 +134,7 @@ export async function createRuntime() {
     return c.json(ok(c.get('requestId') ?? 'local', metrics.snapshot()));
   });
 
-  app.route(config.http.apiPrefix, questionGroupRoutes({ repository, waiter, metrics }));
+  app.route(config.http.apiPrefix, requestRoutes({ repository, waiter, metrics }));
   app.route(config.http.apiPrefix, questionRoutes({ repository }));
 
   return { app, server, repository, waiter, service, config, metrics };

@@ -30,7 +30,7 @@ export class InMemoryHitlRepository implements HitlRepository {
 
     const pendingId = this.pendingByScope.get(scopeKey);
     if (pendingId) {
-      throw new Error('PENDING_GROUP_ALREADY_EXISTS');
+      throw new Error('PENDING_REQUEST_ALREADY_EXISTS');
     }
 
     const now = new Date().toISOString();
@@ -108,7 +108,7 @@ export class InMemoryHitlRepository implements HitlRepository {
     }
 
     const group = this.groups.get(groupId);
-    if (!group) throw new Error('QUESTION_GROUP_NOT_FOUND');
+    if (!group) throw new Error('REQUEST_NOT_FOUND');
     transitionStatus(group.status, 'answered');
 
     const answeredAt = new Date().toISOString();
@@ -134,7 +134,7 @@ export class InMemoryHitlRepository implements HitlRepository {
 
   async cancelGroup(groupId: string, reason?: string): Promise<{ status: 'cancelled'; reason?: string }> {
     const group = this.groups.get(groupId);
-    if (!group) throw new Error('QUESTION_GROUP_NOT_FOUND');
+    if (!group) throw new Error('REQUEST_NOT_FOUND');
     transitionStatus(group.status, 'cancelled');
     group.status = 'cancelled';
     group.updated_at = new Date().toISOString();
@@ -144,7 +144,7 @@ export class InMemoryHitlRepository implements HitlRepository {
 
   async expireGroup(groupId: string, reason?: string): Promise<{ status: 'expired'; reason?: string }> {
     const group = this.groups.get(groupId);
-    if (!group) throw new Error('QUESTION_GROUP_NOT_FOUND');
+    if (!group) throw new Error('REQUEST_NOT_FOUND');
     transitionStatus(group.status, 'expired');
     group.status = 'expired';
     group.updated_at = new Date().toISOString();

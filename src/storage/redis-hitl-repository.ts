@@ -52,7 +52,7 @@ export class RedisHitlRepository implements HitlRepository {
     const pendingKey = redisKeys.pendingScope(this.prefix, input.agent_identity, input.agent_session_id);
     const lockResult = await (this.redis as any).set(pendingKey, groupId, 'NX', 'EX', this.ttlSeconds);
     if (lockResult !== 'OK') {
-      throw new Error('PENDING_GROUP_ALREADY_EXISTS');
+      throw new Error('PENDING_REQUEST_ALREADY_EXISTS');
     }
 
     const tx = this.redis.multi();
@@ -125,7 +125,7 @@ export class RedisHitlRepository implements HitlRepository {
     }
 
     const group = await this.getGroup(groupId);
-    if (!group) throw new Error('QUESTION_GROUP_NOT_FOUND');
+    if (!group) throw new Error('REQUEST_NOT_FOUND');
     transitionStatus(group.status, 'answered');
 
     const answeredAt = new Date().toISOString();
@@ -163,7 +163,7 @@ export class RedisHitlRepository implements HitlRepository {
 
   async cancelGroup(groupId: string, reason?: string): Promise<{ status: 'cancelled'; reason?: string }> {
     const group = await this.getGroup(groupId);
-    if (!group) throw new Error('QUESTION_GROUP_NOT_FOUND');
+    if (!group) throw new Error('REQUEST_NOT_FOUND');
     transitionStatus(group.status, 'cancelled');
 
     const nextGroup: ScopedQuestionGroup = {
@@ -181,7 +181,7 @@ export class RedisHitlRepository implements HitlRepository {
 
   async expireGroup(groupId: string, reason?: string): Promise<{ status: 'expired'; reason?: string }> {
     const group = await this.getGroup(groupId);
-    if (!group) throw new Error('QUESTION_GROUP_NOT_FOUND');
+    if (!group) throw new Error('REQUEST_NOT_FOUND');
     transitionStatus(group.status, 'expired');
 
     const nextGroup: ScopedQuestionGroup = {
