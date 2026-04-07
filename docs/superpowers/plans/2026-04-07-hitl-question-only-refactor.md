@@ -4,7 +4,7 @@
 
 **Goal:** Refactor the external HITL API to a question-only model with multiple pending questions, partial answer submission, and configurable terminal/progressive wait behavior.
 
-**Architecture:** Keep the current Hono + MCP runtime and internal repository foundation, but shift public contracts to question-level operations and make waiting scope-based instead of request-based. Introduce incremental question-state persistence and a scope waiter that emits either terminal-only or progressive snapshots depending on configuration.
+**Architecture:** Keep the current Hono + MCP runtime and internal repository foundation, but shift public contracts to question-level operations and make waiting scope-based instead of request-based. The server generates `question_id` during create, returns it to clients, and all follow-up question operations key off that server-owned identifier. Introduce incremental question-state persistence and a scope waiter that emits either terminal-only or progressive snapshots depending on configuration.
 
 **Tech Stack:** TypeScript, Hono, mcp-use, Vitest, in-memory repository, Redis repository
 
@@ -15,10 +15,12 @@
 **Files:**
 - Modify: `tests/integration/mcp-tools-registration.test.ts`
 - Modify: `tests/integration/http-questions.test.ts`
+- Modify: `tests/unit/domain-schemas.test.ts`
 - Create: `tests/integration/http-pending-questions.test.ts`
 - Create: `tests/integration/http-submit-answers.test.ts`
 
 - [ ] **Step 1: Write the failing tests for new tool names and routes**
+- [ ] **Step 2: Write failing tests that `hitl_ask` / `POST /questions` reject caller-supplied `question_id` and return generated `question_id` values**
 - [ ] **Step 2: Run targeted tests and confirm they fail because the old request-based API still exists**
 
 ### Task 2: Add failing tests for partial submit and accumulated question state
@@ -58,6 +60,7 @@
 - Modify: `src/core/hitl-service.ts`
 
 - [ ] **Step 1: Replace request-oriented public schemas with question-oriented ask/get/submit/cancel/wait schemas**
+- [ ] **Step 2: Remove caller-supplied `question_id` from ask input schema and add server-generated ID stamping in the create flow**
 - [ ] **Step 2: Add `waitMode` to runtime config and loader**
 - [ ] **Step 3: Refactor service APIs from request-level calls to scope-based question operations**
 - [ ] **Step 4: Run related unit and integration tests**
@@ -71,8 +74,9 @@
 - Modify: `src/storage/redis-keys.ts`
 
 - [ ] **Step 1: Add repository methods for listing pending questions by scope**
-- [ ] **Step 2: Replace finalize-only persistence with incremental submit semantics**
-- [ ] **Step 3: Track question status and answered/skipped state per question**
+- [ ] **Step 2: Generate `question_id` server-side during create and persist the mapping in both repositories**
+- [ ] **Step 3: Replace finalize-only persistence with incremental submit semantics**
+- [ ] **Step 4: Track question status and answered/skipped state per question**
 - [ ] **Step 4: Run repository tests**
 
 ### Task 6: Replace single-id waiter with scope-based versioned waiter
@@ -118,8 +122,9 @@
 - Modify: `skills/hitl/SKILL.md`
 
 - [ ] **Step 1: Rewrite docs to describe question-only public APIs**
-- [ ] **Step 2: Document partial submit and wait mode configuration**
-- [ ] **Step 3: Remove stale request/group terminology from public docs**
+- [ ] **Step 2: Document that `question_id` is server-generated and omitted from ask input**
+- [ ] **Step 3: Document partial submit and wait mode configuration**
+- [ ] **Step 4: Remove stale request/group terminology from public docs**
 
 ### Task 9: Verify full behavior
 
@@ -137,4 +142,3 @@ Expected: all Vitest suites pass with 0 failures
 Run: `rg -n "request|group|interaction" README.md README-zh.md docs/api src/mcp src/http`
 
 Expected: internal-only code may still contain storage terms, but public docs/tool names/routes must not expose forbidden terms
-

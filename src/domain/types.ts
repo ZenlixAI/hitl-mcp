@@ -1,7 +1,8 @@
 import type { z } from 'zod';
-import type { askQuestionsInputSchema, questionSchema, submitAnswersInputSchema } from './schemas';
+import type { askQuestionSchema, askQuestionsInputSchema, questionSchema, submitAnswersInputSchema } from './schemas';
 
 export type Question = z.infer<typeof questionSchema>;
+export type AskQuestion = z.infer<typeof askQuestionSchema>;
 export type AskQuestionsInput = z.infer<typeof askQuestionsInputSchema>;
 export type SubmitAnswersInput = z.infer<typeof submitAnswersInputSchema>;
 

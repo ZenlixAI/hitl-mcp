@@ -16,9 +16,27 @@ describe('domain schemas', () => {
     const parsed = askQuestionsInputSchema.safeParse({
       question_group_id: 'qg_bad',
       title: 'group',
-      questions: [{ question_id: 'q_1', type: 'boolean', title: 'approve?' }]
+      questions: [{ type: 'boolean', title: 'approve?' }]
     });
 
     expect(parsed.success).toBe(false);
+  });
+
+  it('rejects caller-supplied question_id in ask schema', () => {
+    const parsed = askQuestionsInputSchema.safeParse({
+      title: 'group',
+      questions: [{ question_id: 'q_bad', type: 'boolean', title: 'approve?' }]
+    });
+
+    expect(parsed.success).toBe(false);
+  });
+
+  it('accepts ask schema without question_id', () => {
+    const parsed = askQuestionsInputSchema.safeParse({
+      title: 'group',
+      questions: [{ type: 'boolean', title: 'approve?' }]
+    });
+
+    expect(parsed.success).toBe(true);
   });
 });

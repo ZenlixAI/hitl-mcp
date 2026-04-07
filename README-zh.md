@@ -50,6 +50,8 @@ caller scope 由以下字段确定：
 
 每次提交都会累积保存，不要求一次性答完所有问题。
 
+`question_id` 由 MCP Server 自动生成。调用 `hitl_ask` 或 `POST /api/v1/questions` 时不要传它。
+
 ## 示例
 
 创建问题：
@@ -59,7 +61,6 @@ caller scope 由以下字段确定：
   "title": "发布决策",
   "questions": [
     {
-      "question_id": "q_canary",
       "type": "single_choice",
       "title": "是否开始金丝雀发布？",
       "options": [
@@ -68,7 +69,6 @@ caller scope 由以下字段确定：
       ]
     },
     {
-      "question_id": "q_note",
       "type": "text",
       "title": "还有补充吗？",
       "required": false
@@ -76,6 +76,8 @@ caller scope 由以下字段确定：
   ]
 }
 ```
+
+创建响应里会返回服务端生成的 `question_id`，之后的提交、取消、查询都使用这些 ID。
 
 部分提交：
 

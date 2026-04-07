@@ -36,18 +36,20 @@ export class RedisHitlRepository implements HitlRepository {
 
     const groupId = `qg_${randomUUID()}`;
     const now = new Date().toISOString();
+    const persistedQuestions = input.questions.map((question) => ({
+      ...question,
+      question_id: `q_${randomUUID()}`,
+      status: 'pending',
+      created_at: now,
+      updated_at: now
+    }));
     const group: ScopedQuestionGroup = {
       agent_identity: input.agent_identity,
       agent_session_id: input.agent_session_id,
       question_group_id: groupId,
       title: input.title,
       description: input.description,
-      questions: input.questions.map((question) => ({
-        ...question,
-        status: 'pending',
-        created_at: now,
-        updated_at: now
-      })),
+      questions: persistedQuestions,
       status: 'pending',
       created_at: now,
       updated_at: now,
@@ -65,16 +67,11 @@ export class RedisHitlRepository implements HitlRepository {
       tx.set(idemKey, groupId, 'EX', this.ttlSeconds);
     }
 
-    for (const question of input.questions) {
+    for (const question of persistedQuestions) {
       const questionId = String(question.question_id);
       tx.set(
         redisKeys.q(this.prefix, questionId),
-        JSON.stringify({
-          ...question,
-          status: 'pending',
-          created_at: now,
-          updated_at: now
-        }),
+        JSON.stringify(question),
         'EX',
         this.ttlSeconds
       );

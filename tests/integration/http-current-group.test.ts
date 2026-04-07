@@ -12,7 +12,7 @@ describe('GET /questions/pending', () => {
 
   it('returns pending questions for authenticated caller scope', async () => {
     const runtime = await createRuntime();
-    await runtime.repository.createPendingGroup({
+    const created = await runtime.repository.createPendingGroup({
       agent_identity: 'api_key:test-api-key',
       agent_session_id: 'session-123',
       title: 'Current group',
@@ -31,9 +31,8 @@ describe('GET /questions/pending', () => {
     const body = await res.json();
 
     expect(res.status).toBe(200);
-    expect(body.data.pending_questions.map((item: { question_id: string }) => item.question_id).sort()).toEqual([
-      'q_current_1',
-      'q_current_2'
-    ]);
+    expect(body.data.pending_questions.map((item: { question_id: string }) => item.question_id).sort()).toEqual(
+      created.questions.map((item: { question_id: string }) => item.question_id).sort()
+    );
   });
 });

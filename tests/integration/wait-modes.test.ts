@@ -19,11 +19,14 @@ describe('wait modes', () => {
       input: {
         title: 'Terminal wait',
         questions: [
-          { question_id: 'q_terminal_1', type: 'boolean', title: 'First?' },
-          { question_id: 'q_terminal_2', type: 'boolean', title: 'Second?' }
+          { type: 'boolean', title: 'First?' },
+          { type: 'boolean', title: 'Second?' }
         ]
       }
     });
+    const pendingQuestions = await service.getPendingQuestions(caller);
+    const firstQuestionId = String(pendingQuestions[0].question_id);
+    const secondQuestionId = String(pendingQuestions[1].question_id);
 
     const waitPromise = service.wait({ caller });
 
@@ -35,7 +38,7 @@ describe('wait modes', () => {
         'x-agent-session-id': caller.agent_session_id
       },
       body: JSON.stringify({
-        answers: { q_terminal_1: { value: true } }
+        answers: { [firstQuestionId]: { value: true } }
       })
     });
 
@@ -53,7 +56,7 @@ describe('wait modes', () => {
         'x-agent-session-id': caller.agent_session_id
       },
       body: JSON.stringify({
-        answers: { q_terminal_2: { value: false } }
+        answers: { [secondQuestionId]: { value: false } }
       })
     });
 
@@ -75,11 +78,14 @@ describe('wait modes', () => {
       input: {
         title: 'Progressive wait',
         questions: [
-          { question_id: 'q_progressive_1', type: 'boolean', title: 'First?' },
-          { question_id: 'q_progressive_2', type: 'boolean', title: 'Second?' }
+          { type: 'boolean', title: 'First?' },
+          { type: 'boolean', title: 'Second?' }
         ]
       }
     });
+    const pendingQuestions = await service.getPendingQuestions(caller);
+    const firstQuestionId = String(pendingQuestions[0].question_id);
+    const secondQuestionId = String(pendingQuestions[1].question_id);
 
     const firstWait = service.wait({ caller });
     await app.request('/api/v1/questions/answers', {
@@ -90,14 +96,14 @@ describe('wait modes', () => {
         'x-agent-session-id': caller.agent_session_id
       },
       body: JSON.stringify({
-        answers: { q_progressive_1: { value: true } }
+        answers: { [firstQuestionId]: { value: true } }
       })
     });
 
     const firstEvent = await firstWait;
     expect(firstEvent.status).toBe('in_progress');
     expect(firstEvent.is_terminal).toBe(false);
-    expect(firstEvent.changed_question_ids).toEqual(['q_progressive_1']);
+    expect(firstEvent.changed_question_ids).toEqual([firstQuestionId]);
 
     const secondWait = service.wait({ caller });
     await app.request('/api/v1/questions/answers', {
@@ -108,13 +114,13 @@ describe('wait modes', () => {
         'x-agent-session-id': caller.agent_session_id
       },
       body: JSON.stringify({
-        answers: { q_progressive_2: { value: false } }
+        answers: { [secondQuestionId]: { value: false } }
       })
     });
 
     const secondEvent = await secondWait;
     expect(secondEvent.status).toBe('completed');
     expect(secondEvent.is_terminal).toBe(true);
-    expect(secondEvent.changed_question_ids).toEqual(['q_progressive_2']);
+    expect(secondEvent.changed_question_ids).toEqual([secondQuestionId]);
   });
 });

@@ -81,6 +81,8 @@ Each question includes:
 - `extra?`
 - `tags?`
 
+`question_id` is server-generated. Public create inputs do not accept caller-supplied `question_id`.
+
 ### Pending question snapshot
 Scope-level snapshot includes:
 - `pending_questions`
@@ -146,6 +148,20 @@ Result:
 - current pending question snapshot is returned
 - scope waiters are notified of the state change
 
+### `POST /questions`
+Input question definitions include content only:
+- `title`
+- `description?`
+- `type`
+- type-specific constraints/options
+- `required`
+- `extra?`
+- `tags?`
+
+They do not include `question_id`.
+
+On creation, the server stamps each question with a generated `question_id` and returns that identifier in the created question objects.
+
 ## Cancel Semantics
 
 ### `POST /questions/cancel`
@@ -207,6 +223,8 @@ The docs must consistently describe:
 ## Testing Requirements
 Required coverage:
 - create multiple questions in one ask
+- reject caller-supplied `question_id` in ask input
+- return server-generated `question_id` values from ask
 - fetch all pending questions in scope
 - partial answer submission accumulates state
 - optional question skip works incrementally
@@ -215,4 +233,3 @@ Required coverage:
 - multiple pending questions coexist correctly
 - cancelling a subset of questions updates pending snapshot correctly
 - duplicate answer submission behavior is enforced
-

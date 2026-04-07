@@ -27,6 +27,8 @@ Metrics snapshot.
 
 Create one or more pending questions for the current caller scope.
 
+Input questions must not include `question_id`. The server generates it and returns it in the created question objects.
+
 Headers:
 
 - `x-agent-session-id`
@@ -40,7 +42,6 @@ Body:
   "title": "Release Decision",
   "questions": [
     {
-      "question_id": "q_canary",
       "type": "single_choice",
       "title": "Can we start canary deployment?",
       "options": [
@@ -65,9 +66,9 @@ Body:
 ```json
 {
   "answers": {
-    "q_canary": { "value": "yes" }
+    "q_01JXYZ...": { "value": "yes" }
   },
-  "skipped_question_ids": ["q_note"],
+  "skipped_question_ids": ["q_01JABC..."],
   "idempotency_key": "idem-1"
 }
 ```
@@ -92,7 +93,7 @@ Body:
 
 ```json
 {
-  "question_ids": ["q_canary"],
+  "question_ids": ["q_01JXYZ..."],
   "reason": "no longer needed"
 }
 ```

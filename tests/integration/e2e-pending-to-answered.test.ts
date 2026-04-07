@@ -16,7 +16,6 @@ describe('e2e pending to answered', () => {
         title: 'Need user decision',
         questions: [
           {
-            question_id: 'q_1',
             type: 'single_choice',
             title: 'Pick one',
             options: [
@@ -25,7 +24,6 @@ describe('e2e pending to answered', () => {
             ]
           },
           {
-            question_id: 'q_2',
             type: 'boolean',
             title: 'Confirm?'
           }
@@ -33,6 +31,10 @@ describe('e2e pending to answered', () => {
       }
     });
     expect(created).toHaveLength(2);
+    const firstQuestionId = String(created[0].question_id);
+    const secondQuestionId = String(created[1].question_id);
+    expect(firstQuestionId).toMatch(/^q_/);
+    expect(secondQuestionId).toMatch(/^q_/);
 
     const waitPromise = service.wait({ caller });
 
@@ -52,7 +54,7 @@ describe('e2e pending to answered', () => {
       },
       body: JSON.stringify({
         answers: {
-          q_1: { value: 'A' }
+          [firstQuestionId]: { value: 'A' }
         }
       })
     });
@@ -74,7 +76,7 @@ describe('e2e pending to answered', () => {
       },
       body: JSON.stringify({
         answers: {
-          q_2: { value: true }
+          [secondQuestionId]: { value: true }
         }
       })
     });
@@ -84,6 +86,6 @@ describe('e2e pending to answered', () => {
     const finalPayload = await waitPromise;
     expect(finalPayload.status).toBe('completed');
     expect(finalPayload.is_terminal).toBe(true);
-    expect(finalPayload.answered_question_ids.sort()).toEqual(['q_1', 'q_2']);
+    expect(finalPayload.answered_question_ids.sort()).toEqual([firstQuestionId, secondQuestionId].sort());
   });
 });

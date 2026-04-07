@@ -89,6 +89,7 @@ export class InMemoryHitlRepository implements HitlRepository {
       description: input.description,
       questions: input.questions.map((question) => ({
         ...question,
+        question_id: `q_${randomUUID()}`,
         status: 'pending',
         created_at: now,
         updated_at: now

@@ -21,6 +21,7 @@ describe('idempotency', () => {
         }
       ]
     });
+    const questionId = String(created.questions[0].question_id);
 
     const caller = {
       agent_identity: 'api_key:test-agent',
@@ -29,14 +30,14 @@ describe('idempotency', () => {
 
     const first = await repository.submitAnswers(
       caller,
-      { q_1: { value: 'A' } },
+      { [questionId]: { value: 'A' } },
       [],
       'idem-1'
     );
 
     const second = await repository.submitAnswers(
       caller,
-      { q_1: { value: 'B' } },
+      { [questionId]: { value: 'B' } },
       [],
       'idem-1'
     );

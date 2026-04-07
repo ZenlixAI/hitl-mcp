@@ -36,6 +36,7 @@ describe('http submit validation', () => {
         }
       ]
     });
+    const questionId = String(created.questions[0].question_id);
 
     const res = await runtime.app.request('/api/v1/questions/answers', {
       method: 'POST',
@@ -44,7 +45,7 @@ describe('http submit validation', () => {
         'x-agent-identity': 'api_key:test-agent',
         'x-agent-session-id': 'session-invalid-1'
       },
-      body: JSON.stringify({ answers: { q_range_1: { value: 99 } } })
+      body: JSON.stringify({ answers: { [questionId]: { value: 99 } } })
     });
 
     expect(res.status).toBe(422);
@@ -57,7 +58,7 @@ describe('http submit validation', () => {
 
   it('accepts partial submission and keeps unanswered questions pending', async () => {
     const runtime = await createRuntime();
-    await runtime.repository.createPendingGroup({
+    const created = await runtime.repository.createPendingGroup({
       agent_identity: 'api_key:test-agent',
       agent_session_id: 'session-optional-1',
       title: 'group',
@@ -76,6 +77,8 @@ describe('http submit validation', () => {
         }
       ]
     });
+    const requiredQuestionId = String(created.questions[0].question_id);
+    const optionalQuestionId = String(created.questions[1].question_id);
 
     const res = await runtime.app.request('/api/v1/questions/answers', {
       method: 'POST',
@@ -86,7 +89,7 @@ describe('http submit validation', () => {
       },
       body: JSON.stringify({
         answers: {
-          q_required_1: { value: true }
+          [requiredQuestionId]: { value: true }
         }
       })
     });
@@ -95,6 +98,6 @@ describe('http submit validation', () => {
     const payload = await res.json();
     expect(payload.data.status).toBe('in_progress');
     expect(payload.data.pending_questions).toHaveLength(1);
-    expect(payload.data.pending_questions[0].question_id).toBe('q_optional_1');
+    expect(payload.data.pending_questions[0].question_id).toBe(optionalQuestionId);
   });
 });

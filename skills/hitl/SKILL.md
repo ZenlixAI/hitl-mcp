@@ -56,7 +56,7 @@ In progressive mode, call `hitl_wait` again after each response if you still nee
 
 ## Rules
 
-- Keep `question_id` stable within the scope of the workflow you create.
+- Do not send `question_id` when asking questions. The server generates it.
 - Multiple pending questions are allowed.
 - Partial submission is allowed.
 - Optional questions need an explicit skip action if they should be marked ignored.
@@ -72,7 +72,6 @@ Ask:
   "title": "Release Decision",
   "questions": [
     {
-      "question_id": "q_canary",
       "type": "single_choice",
       "title": "Can we start canary deployment?",
       "options": [
@@ -81,7 +80,6 @@ Ask:
       ]
     },
     {
-      "question_id": "q_note",
       "type": "text",
       "title": "Anything to note?",
       "required": false
@@ -90,12 +88,14 @@ Ask:
 }
 ```
 
+Use the returned server-generated `question_id` values in later submit, cancel, and get calls.
+
 Submit part of the progress:
 
 ```json
 {
   "answers": {
-    "q_canary": { "value": "yes" }
+    "q_01JXYZ...": { "value": "yes" }
   }
 }
 ```
@@ -104,6 +104,6 @@ Skip the optional remainder:
 
 ```json
 {
-  "skipped_question_ids": ["q_note"]
+  "skipped_question_ids": ["q_01JABC..."]
 }
 ```

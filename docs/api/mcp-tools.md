@@ -4,6 +4,8 @@
 
 Create one or more pending questions for the current caller scope.
 
+Input questions must not include `question_id`. The server generates it.
+
 Input:
 
 ```json
@@ -11,7 +13,6 @@ Input:
   "title": "Release Decision",
   "questions": [
     {
-      "question_id": "q_canary",
       "type": "single_choice",
       "title": "Can we start canary deployment?",
       "options": [
@@ -29,7 +30,7 @@ Output:
 {
   "questions": [
     {
-      "question_id": "q_canary",
+      "question_id": "q_01JXYZ...",
       "status": "pending"
     }
   ]
@@ -74,7 +75,7 @@ Output:
 {
   "pending_questions": [
     {
-      "question_id": "q_note",
+      "question_id": "q_01JXYZ...",
       "status": "pending"
     }
   ]
@@ -90,9 +91,9 @@ Input:
 ```json
 {
   "answers": {
-    "q_canary": { "value": "yes" }
+    "q_01JXYZ...": { "value": "yes" }
   },
-  "skipped_question_ids": ["q_note"],
+  "skipped_question_ids": ["q_01JABC..."],
   "idempotency_key": "idem-1"
 }
 ```
@@ -103,10 +104,10 @@ Output:
 {
   "status": "completed",
   "is_terminal": true,
-  "changed_question_ids": ["q_canary", "q_note"],
+  "changed_question_ids": ["q_01JXYZ...", "q_01JABC..."],
   "pending_questions": [],
-  "answered_question_ids": ["q_canary"],
-  "skipped_question_ids": ["q_note"],
+  "answered_question_ids": ["q_01JXYZ..."],
+  "skipped_question_ids": ["q_01JABC..."],
   "cancelled_question_ids": [],
   "is_complete": true
 }
@@ -120,7 +121,7 @@ Input:
 
 ```json
 {
-  "question_ids": ["q_canary"],
+  "question_ids": ["q_01JXYZ..."],
   "reason": "no longer needed"
 }
 ```
