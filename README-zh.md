@@ -52,6 +52,8 @@ caller scope 由以下字段确定：
 
 `question_id` 由 MCP Server 自动生成。调用 `hitl_ask` 或 `POST /api/v1/questions` 时不要传它。
 
+默认监听地址：`0.0.0.0:4000`
+
 ## 示例
 
 创建问题：
@@ -82,7 +84,7 @@ caller scope 由以下字段确定：
 部分提交：
 
 ```bash
-curl -X POST "http://localhost:3000/api/v1/questions/answers" \
+curl -X POST "http://localhost:4000/api/v1/questions/answers" \
   -H "Content-Type: application/json" \
   -H "x-agent-identity: api_key:test-agent" \
   -H "x-agent-session-id: session-123" \

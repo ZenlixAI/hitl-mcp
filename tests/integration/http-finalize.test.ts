@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { afterEach, describe, it, expect, vi } from 'vitest';
 import { createHttpApp, createRuntime } from '../../src/server/create-server';
 
 describe('http submit answers api', () => {
@@ -21,6 +21,10 @@ describe('http submit answers api', () => {
 });
 
 describe('http submit validation', () => {
+  afterEach(() => {
+    vi.restoreAllMocks();
+  });
+
   it('returns 422 when answers are invalid and keeps pending', async () => {
     const runtime = await createRuntime();
     const created = await runtime.repository.createPendingGroup({
@@ -99,5 +103,38 @@ describe('http submit validation', () => {
     expect(payload.data.status).toBe('in_progress');
     expect(payload.data.pending_questions).toHaveLength(1);
     expect(payload.data.pending_questions[0].question_id).toBe(optionalQuestionId);
+  });
+
+  it('logs validation failures as structured warnings', async () => {
+    const logSpy = vi.spyOn(console, 'log').mockImplementation(() => {});
+    const runtime = await createRuntime();
+    const created = await runtime.repository.createPendingGroup({
+      agent_identity: 'api_key:test-agent',
+      agent_session_id: 'session-log-1',
+      title: 'group',
+      questions: [
+        {
+          question_id: 'q_range_log',
+          type: 'range',
+          title: 'score',
+          range_constraints: { min: 0, max: 10, step: 1 }
+        }
+      ]
+    });
+    const questionId = String(created.questions[0].question_id);
+
+    const res = await runtime.app.request('/api/v1/questions/answers', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-agent-identity': 'api_key:test-agent',
+        'x-agent-session-id': 'session-log-1'
+      },
+      body: JSON.stringify({ answers: { [questionId]: { value: 99 } } })
+    });
+
+    expect(res.status).toBe(422);
+    const messages = logSpy.mock.calls.map((call) => String(call[0]));
+    expect(messages.some((line) => line.includes('"message":"submit_answers_failed"') && line.includes('"level":"warn"'))).toBe(true);
   });
 });

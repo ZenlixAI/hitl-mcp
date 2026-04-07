@@ -21,6 +21,7 @@ async function resolveRepository(params: {
   redisUrl: string;
   redisPrefix: string;
   ttlSeconds: number;
+  logger: Logger;
 }): Promise<HitlRepository> {
   if (params.storageKind !== 'redis') return new InMemoryHitlRepository();
 
@@ -30,11 +31,18 @@ async function resolveRepository(params: {
     await redis.connect();
     await redis.ping();
     return new RedisHitlRepository(redis, params.redisPrefix, params.ttlSeconds);
-  } catch {
+  } catch (error) {
+    params.logger.warn('redis_repository_unavailable', {
+      redis_url: params.redisUrl,
+      error
+    });
     try {
       await redis.quit();
-    } catch {
-      // ignore quit errors during fallback
+    } catch (quitError) {
+      params.logger.warn('redis_quit_failed', {
+        redis_url: params.redisUrl,
+        error: quitError
+      });
     }
     return new InMemoryHitlRepository();
   }
@@ -48,7 +56,8 @@ export async function createRuntime() {
     storageKind: config.storage.kind,
     redisUrl: config.redis.url,
     redisPrefix: config.redis.keyPrefix,
-    ttlSeconds: config.ttl.defaultSeconds
+    ttlSeconds: config.ttl.defaultSeconds,
+    logger
   });
   const waiter = new Waiter();
   const service = new HitlService(
@@ -74,13 +83,35 @@ export async function createRuntime() {
     ]
   });
   server.use('mcp:tools/call', async (ctx, next) => {
-    injectCallerScopeIntoMcpState(ctx, {
-      sessionHeader: config.agentIdentity.sessionHeader
-    });
-    return next();
+    try {
+      injectCallerScopeIntoMcpState(ctx, {
+        sessionHeader: config.agentIdentity.sessionHeader
+      });
+      return next();
+    } catch (error) {
+      logger.warn('mcp_caller_scope_injection_failed', {
+        tool_name: String((ctx as { params?: { name?: string } }).params?.name ?? 'unknown'),
+        error
+      });
+      throw error;
+    }
   });
-  registerHitlTools(server, service);
+  registerHitlTools(server, service, logger);
   const app = server.app;
+
+  app.onError((error, c) => {
+    const requestId = c.get('requestId') ?? 'local';
+    logger.error('http_unhandled_error', {
+      request_id: requestId,
+      method: c.req.method,
+      path: c.req.path,
+      error
+    });
+    return c.json(
+      fail(requestId, 'INTERNAL_SERVER_ERROR', 'internal server error'),
+      500
+    );
+  });
 
   app.use('*', requestIdMiddleware);
   app.use('*', async (c, next) => {
@@ -88,7 +119,8 @@ export async function createRuntime() {
     await next();
     const requestId = c.get('requestId') ?? 'local';
     const traceId = c.get('traceId') ?? requestId;
-    logger.info('http_request', {
+    const level = c.res.status >= 500 ? 'error' : c.res.status >= 400 ? 'warn' : 'info';
+    logger[level]('http_request', {
       method: c.req.method,
       path: c.req.path,
       status: c.res.status,
@@ -145,7 +177,7 @@ export async function createRuntime() {
     return c.json(ok(c.get('requestId') ?? 'local', metrics.snapshot()));
   });
 
-  app.route(config.http.apiPrefix, questionRoutes({ service, metrics }));
+  app.route(config.http.apiPrefix, questionRoutes({ service, metrics, logger }));
 
   return { app, server, repository, waiter, service, config, metrics };
 }

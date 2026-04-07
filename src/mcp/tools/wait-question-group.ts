@@ -1,9 +1,10 @@
 import { object, error, type MCPServer } from 'mcp-use/server';
 import { waitQuestionsInputSchema } from '../../domain/schemas';
 import type { HitlService } from '../../core/hitl-service';
+import type { Logger } from '../../observability/logger';
 import { readCallerScopeFromMcpContext } from '../caller-scope';
 
-export function registerWaitTool(server: MCPServer, service: HitlService) {
+export function registerWaitTool(server: MCPServer, service: HitlService, logger: Logger) {
   server.tool(
     {
       name: 'hitl_wait',
@@ -17,6 +18,10 @@ export function registerWaitTool(server: MCPServer, service: HitlService) {
         });
         return object(result);
       } catch (err) {
+        logger.warn('mcp_wait_failed', {
+          tool_name: 'hitl_wait',
+          error: err
+        });
         return error(err instanceof Error ? err.message : 'failed to wait for questions');
       }
     }

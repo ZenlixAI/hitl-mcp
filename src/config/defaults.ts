@@ -1,8 +1,8 @@
 import type { AppConfig } from './types';
 
 export const defaultConfig: AppConfig = {
-  server: { name: 'hitl-mcp', version: '0.1.0', baseUrl: 'http://localhost:3000' },
-  http: { host: '0.0.0.0', port: 3000, apiPrefix: '/api/v1' },
+  server: { name: 'hitl-mcp', version: '0.1.0', baseUrl: 'http://0.0.0.0:4000' },
+  http: { host: '0.0.0.0', port: 4000, apiPrefix: '/api/v1' },
   storage: { kind: 'memory' },
   redis: { url: 'redis://127.0.0.1:6379', keyPrefix: 'hitl' },
   ttl: { defaultSeconds: 7 * 24 * 3600, answeredRetentionSeconds: 30 * 24 * 3600 },

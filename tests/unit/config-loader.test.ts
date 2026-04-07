@@ -2,6 +2,16 @@ import { describe, it, expect } from 'vitest';
 import { resolveConfig } from '../../src/config/load-config';
 
 describe('config loader', () => {
+  it('uses 0.0.0.0:4000 as default host and port', async () => {
+    const config = await resolveConfig({
+      env: {}
+    });
+
+    expect(config.http.host).toBe('0.0.0.0');
+    expect(config.http.port).toBe(4000);
+    expect(config.server.baseUrl).toBe('http://0.0.0.0:4000');
+  });
+
   it('applies precedence env > dotenv > yaml > defaults', async () => {
     const config = await resolveConfig({
       env: { HITL_HTTP_PORT: '7777' },
