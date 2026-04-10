@@ -256,10 +256,11 @@ curl -X POST "http://localhost:4000/api/v1/questions" \
 ### 时序 1：标准 ask -> wait -> answer -> complete
 
 1. Agent 在自己的 caller scope 下创建一个或多个问题。
-2. UI 或后端读取这个 scope 下的 pending questions。
-3. 人类回答其中一个或多个问题。
-4. Agent 对该 scope 执行 wait。
-5. 当 scope 下不再有 pending questions 时，wait 返回 terminal 结果。
+2. Agent 立即调用 `hitl_wait`。
+3. UI 或后端读取这个 scope 下的 pending questions。
+4. 人类回答其中一个或多个问题。
+5. Agent 对该 scope 执行 wait。
+6. 当 scope 下不再有 pending questions 时，wait 返回 terminal 结果。
 
 ### 时序 2：部分提交
 
@@ -290,6 +291,12 @@ wait 始终是 **scope 级操作**，这是有意为之：
 - 一个 Agent 运行实例可能同时挂起多个问题
 - Agent 真正关心的通常是“当前流程能否继续”
 - 以 scope 为单位等待，可以避免大量碎片化的逐 question 同步逻辑
+
+执行规则：
+
+- 每次 `hitl_ask` 之后，下一次 HITL tool 调用必须是 `hitl_wait`
+- 不要把 `hitl_ask` 当成流程结束
+- 不要用 `hitl_get_pending_questions` 代替 ask 之后第一次 wait
 
 ---
 
@@ -333,10 +340,13 @@ wait 始终是 **scope 级操作**，这是有意为之：
 - `is_terminal`
 - `changed_question_ids`
 - `pending_questions`
+- `resolved_questions`
 - `answered_question_ids`
 - `skipped_question_ids`
 - `cancelled_question_ids`
 - `is_complete`
+
+`resolved_questions` 会返回已经完成的问题完整对象，以及对应的最终状态和可用时的答案。
 
 ### `hitl_get_pending_questions`
 
@@ -647,6 +657,7 @@ observability:
 每次状态变化后，系统都会生成一份 scope snapshot，其中包含：
 
 - pending questions
+- resolved questions，以及其中完整 question 对象和可用时的 answer
 - answered question IDs
 - skipped question IDs
 - cancelled question IDs
@@ -737,7 +748,7 @@ observability:
 
 对于 HTTP：
 
-1. auth 与 caller context middleware 解析身份和 session
+1. caller context middleware 解析身份和 session
 2. route handler 校验输入并调用 `HitlService`
 3. repository 更新状态
 4. 最终包装成统一响应信封

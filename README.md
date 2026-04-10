@@ -256,10 +256,11 @@ This section describes the intended runtime flow, regardless of whether the call
 ### Sequence 1: standard ask -> wait -> answer -> complete
 
 1. The Agent creates one or more questions in its caller scope.
-2. A UI or backend fetches pending questions for the same caller scope.
-3. A human answers one or more pending questions.
-4. The Agent waits on the scope.
-5. When the scope has no pending questions left, wait returns a terminal result.
+2. The Agent immediately calls `hitl_wait`.
+3. A UI or backend fetches pending questions for the same caller scope.
+4. A human answers one or more pending questions.
+5. The Agent waits on the scope.
+6. When the scope has no pending questions left, wait returns a terminal result.
 
 ### Sequence 2: partial submission
 
@@ -292,6 +293,12 @@ This is deliberate:
 - one Agent run may have multiple pending questions
 - the Agent usually cares whether the workflow can continue
 - scope-level wait avoids fragmented per-question synchronization logic
+
+Operational rule:
+
+- after every `hitl_ask`, the next HITL tool call must be `hitl_wait`
+- do not treat `hitl_ask` as completion
+- do not substitute `hitl_get_pending_questions` for the first post-ask wait
 
 ---
 
@@ -335,10 +342,13 @@ Typical response fields:
 - `is_terminal`
 - `changed_question_ids`
 - `pending_questions`
+- `resolved_questions`
 - `answered_question_ids`
 - `skipped_question_ids`
 - `cancelled_question_ids`
 - `is_complete`
+
+`resolved_questions` contains the full resolved question objects plus their final status and any stored answer.
 
 ### `hitl_get_pending_questions`
 
@@ -649,6 +659,7 @@ observability:
 Each state-changing operation updates a scope snapshot containing:
 
 - pending questions
+- resolved questions with full question payloads and answers when available
 - answered question IDs
 - skipped question IDs
 - cancelled question IDs
@@ -738,7 +749,7 @@ Provides:
 
 For HTTP:
 
-1. auth and caller context middleware resolve identity and session
+1. caller context middleware resolves identity and session
 2. route handler validates input and calls `HitlService`
 3. repository updates state
 4. response is wrapped in the standard envelope
