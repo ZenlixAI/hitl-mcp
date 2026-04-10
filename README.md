@@ -188,8 +188,8 @@ npm run dev
 
 Default local bind:
 
-- HTTP base URL: `http://0.0.0.0:4000`
-- MCP base URL: `http://0.0.0.0:4000/mcp`
+- HTTP base URL: `http://0.0.0.0:3000`
+- MCP base URL: `http://0.0.0.0:3000/mcp`
 - HTTP API prefix: `/api/v1`
 
 ## Run with Docker
@@ -203,16 +203,16 @@ docker build -t hitl-mcp .
 Run with in-memory storage:
 
 ```bash
-docker run --rm -p 4000:4000 \
-  -e MCP_URL=http://localhost:4000 \
+docker run --rm -p 3000:3000 \
+  -e MCP_URL=http://localhost:3000 \
   hitl-mcp
 ```
 
 Run with Redis:
 
 ```bash
-docker run --rm -p 4000:4000 \
-  -e MCP_URL=http://localhost:4000 \
+docker run --rm -p 3000:3000 \
+  -e MCP_URL=http://localhost:3000 \
   -e HITL_STORAGE=redis \
   -e HITL_REDIS_URL=redis://host.docker.internal:6379 \
   hitl-mcp
@@ -221,14 +221,14 @@ docker run --rm -p 4000:4000 \
 ## Run from source with environment variables
 
 ```bash
-export MCP_URL=http://localhost:4000
+export MCP_URL=http://localhost:3000
 npm run dev
 ```
 
 ## Minimal create request
 
 ```bash
-curl -X POST "http://localhost:4000/api/v1/questions" \
+curl -X POST "http://localhost:3000/api/v1/questions" \
   -H "Content-Type: application/json" \
   -H "x-agent-identity: agent/example" \
   -H "x-agent-session-id: session-123" \
@@ -580,12 +580,12 @@ The following environment variables are currently supported by the codebase.
 
 | Variable | Default | Purpose | When to change |
 | --- | --- | --- | --- |
-| `PORT` | `4000` | Fallback HTTP port. Equivalent to `HITL_HTTP_PORT` when set. | Change when your runtime injects only `PORT` or when a platform requires a fixed port env. |
-| `MCP_URL` | `http://0.0.0.0:4000` | Public base URL used by the MCP server metadata. | Change in any non-local deployment so MCP clients receive the reachable external URL. |
+| `PORT` | `3000` | Fallback HTTP port. Equivalent to `HITL_HTTP_PORT` when set. | Change when your runtime injects only `PORT` or when a platform requires a fixed port env. |
+| `MCP_URL` | `http://0.0.0.0:3000` | Public base URL used by the MCP server metadata. | Change in any non-local deployment so MCP clients receive the reachable external URL. |
 | `HITL_SERVER_NAME` | `hitl-mcp` | MCP server name metadata. | Change when embedding this server under another product identity. |
 | `HITL_SERVER_VERSION` | `0.1.0` | MCP server version metadata. | Change when publishing a packaged build with an explicit runtime version. |
 | `HITL_HTTP_HOST` | `0.0.0.0` | HTTP bind host. | Change only if you intentionally want loopback-only binding or a different interface. |
-| `HITL_HTTP_PORT` | `4000` | Explicit HTTP port. Overrides the default port. | Change in local multi-service setups or production platforms with custom port mapping. |
+| `HITL_HTTP_PORT` | `3000` | Explicit HTTP port. Overrides the default port. | Change in local multi-service setups or production platforms with custom port mapping. |
 | `HITL_HTTP_API_PREFIX` | `/api/v1` | Prefix for HTTP control-plane routes. | Change only if you need to mount the API behind a different path segment. |
 | `HITL_STORAGE` | `memory` | Storage backend selection: `memory` or `redis`. | Set to `redis` for multi-process or durable deployments. |
 | `HITL_REDIS_URL` | `redis://127.0.0.1:6379` | Redis connection URL. | Required when `HITL_STORAGE=redis` outside local defaults. |
@@ -604,7 +604,7 @@ The following environment variables are currently supported by the codebase.
 ```yaml
 http:
   host: 0.0.0.0
-  port: 4000
+  port: 3000
   apiPrefix: /api/v1
 storage:
   kind: redis

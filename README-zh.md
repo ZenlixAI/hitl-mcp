@@ -188,8 +188,8 @@ npm run dev
 
 默认本地监听地址：
 
-- HTTP base URL: `http://0.0.0.0:4000`
-- MCP base URL: `http://0.0.0.0:4000/mcp`
+- HTTP base URL: `http://0.0.0.0:3000`
+- MCP base URL: `http://0.0.0.0:3000/mcp`
 - HTTP API prefix: `/api/v1`
 
 ### 使用 Docker 运行
@@ -203,16 +203,16 @@ docker build -t hitl-mcp .
 使用内存存储运行：
 
 ```bash
-docker run --rm -p 4000:4000 \
-  -e MCP_URL=http://localhost:4000 \
+docker run --rm -p 3000:3000 \
+  -e MCP_URL=http://localhost:3000 \
   hitl-mcp
 ```
 
 使用 Redis 运行：
 
 ```bash
-docker run --rm -p 4000:4000 \
-  -e MCP_URL=http://localhost:4000 \
+docker run --rm -p 3000:3000 \
+  -e MCP_URL=http://localhost:3000 \
   -e HITL_STORAGE=redis \
   -e HITL_REDIS_URL=redis://host.docker.internal:6379 \
   hitl-mcp
@@ -221,14 +221,14 @@ docker run --rm -p 4000:4000 \
 ### 从源码配置环境变量运行
 
 ```bash
-export MCP_URL=http://localhost:4000
+export MCP_URL=http://localhost:3000
 npm run dev
 ```
 
 ### 最小创建示例
 
 ```bash
-curl -X POST "http://localhost:4000/api/v1/questions" \
+curl -X POST "http://localhost:3000/api/v1/questions" \
   -H "Content-Type: application/json" \
   -H "x-agent-identity: agent/example" \
   -H "x-agent-session-id: session-123" \
@@ -578,12 +578,12 @@ HTTP 控制面主要面向运营界面、业务后端和排障工具。
 
 | 变量 | 默认值 | 作用 | 何时需要修改 |
 | --- | --- | --- | --- |
-| `PORT` | `4000` | 兜底 HTTP 端口。设置后效果等价于 `HITL_HTTP_PORT`。 | 当运行平台只注入 `PORT`，或平台要求固定端口变量时。 |
-| `MCP_URL` | `http://0.0.0.0:4000` | MCP server metadata 中对外暴露的 base URL。 | 任何非本地部署都应改成外部可达地址。 |
+| `PORT` | `3000` | 兜底 HTTP 端口。设置后效果等价于 `HITL_HTTP_PORT`。 | 当运行平台只注入 `PORT`，或平台要求固定端口变量时。 |
+| `MCP_URL` | `http://0.0.0.0:3000` | MCP server metadata 中对外暴露的 base URL。 | 任何非本地部署都应改成外部可达地址。 |
 | `HITL_SERVER_NAME` | `hitl-mcp` | MCP server 名称元数据。 | 当你要把它嵌入到自己的产品命名体系时。 |
 | `HITL_SERVER_VERSION` | `0.1.0` | MCP server 版本元数据。 | 当你要发布一个明确版本的运行实例时。 |
 | `HITL_HTTP_HOST` | `0.0.0.0` | HTTP 监听地址。 | 仅当你想限制为 loopback 或绑定其他网卡时。 |
-| `HITL_HTTP_PORT` | `4000` | 显式 HTTP 端口。覆盖默认端口。 | 本地多服务并行或生产自定义端口映射时。 |
+| `HITL_HTTP_PORT` | `3000` | 显式 HTTP 端口。覆盖默认端口。 | 本地多服务并行或生产自定义端口映射时。 |
 | `HITL_HTTP_API_PREFIX` | `/api/v1` | HTTP 控制面路由前缀。 | 只有在你要把 API 挂载到不同路径下时才需要改。 |
 | `HITL_STORAGE` | `memory` | 存储后端选择：`memory` 或 `redis`。 | 生产和多进程部署应设置为 `redis`。 |
 | `HITL_REDIS_URL` | `redis://127.0.0.1:6379` | Redis 连接地址。 | 当 `HITL_STORAGE=redis` 且本地默认地址不适用时。 |
@@ -602,7 +602,7 @@ HTTP 控制面主要面向运营界面、业务后端和排障工具。
 ```yaml
 http:
   host: 0.0.0.0
-  port: 4000
+  port: 3000
   apiPrefix: /api/v1
 storage:
   kind: redis

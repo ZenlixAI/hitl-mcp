@@ -19,12 +19,12 @@ RUN npm ci --omit=dev --ignore-scripts
 FROM node:22-alpine AS runtime
 WORKDIR /app
 
-ENV PORT=4000 \
-    MCP_URL=http://0.0.0.0:4000 \
+ENV PORT=3000 \
+    MCP_URL=http://0.0.0.0:3000 \
     HITL_SERVER_NAME=hitl-mcp \
     HITL_SERVER_VERSION=0.1.0 \
     HITL_HTTP_HOST=0.0.0.0 \
-    HITL_HTTP_PORT=4000 \
+    HITL_HTTP_PORT=3000 \
     HITL_HTTP_API_PREFIX=/api/v1 \
     HITL_STORAGE=memory \
     HITL_REDIS_URL=redis://127.0.0.1:6379 \
@@ -48,6 +48,6 @@ COPY --from=build --chown=node:node /app/config ./config
 
 USER node
 
-EXPOSE 4000
+EXPOSE 3000
 
 CMD ["npm", "start"]
