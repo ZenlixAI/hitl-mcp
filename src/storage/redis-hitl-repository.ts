@@ -142,6 +142,7 @@ export class RedisHitlRepository implements HitlRepository {
     ).filter(Boolean) as ScopedQuestionGroup[];
 
     const pendingQuestions: Array<Record<string, unknown>> = [];
+    const resolvedQuestions: ScopeQuestionSnapshot['resolved_questions'] = [];
     const answeredQuestionIds: string[] = [];
     const skippedQuestionIds: string[] = [];
     const cancelledQuestionIds: string[] = [];
@@ -150,14 +151,36 @@ export class RedisHitlRepository implements HitlRepository {
       for (const question of group.questions as Array<Record<string, unknown>>) {
         const status = question.status as string;
         if (status === 'pending') pendingQuestions.push(question);
-        if (status === 'answered') answeredQuestionIds.push(String(question.question_id));
-        if (status === 'skipped') skippedQuestionIds.push(String(question.question_id));
-        if (status === 'cancelled') cancelledQuestionIds.push(String(question.question_id));
+        if (status === 'answered') {
+          answeredQuestionIds.push(String(question.question_id));
+          resolvedQuestions.push({
+            question,
+            status: 'answered',
+            ...(Object.prototype.hasOwnProperty.call(question, 'answer')
+              ? { answer: question.answer }
+              : {})
+          });
+        }
+        if (status === 'skipped') {
+          skippedQuestionIds.push(String(question.question_id));
+          resolvedQuestions.push({
+            question,
+            status: 'skipped'
+          });
+        }
+        if (status === 'cancelled') {
+          cancelledQuestionIds.push(String(question.question_id));
+          resolvedQuestions.push({
+            question,
+            status: 'cancelled'
+          });
+        }
       }
     }
 
     return {
       pending_questions: pendingQuestions,
+      resolved_questions: resolvedQuestions,
       answered_question_ids: answeredQuestionIds,
       skipped_question_ids: skippedQuestionIds,
       cancelled_question_ids: cancelledQuestionIds,

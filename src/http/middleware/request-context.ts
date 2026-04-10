@@ -1,13 +1,10 @@
 import type { Context, MiddlewareHandler } from 'hono';
 import { fail } from '../response';
 
-export function requestContextMiddleware(params: {
-  sessionHeader: string;
-  resolveAgentIdentity: (c: Context) => string | null;
-}): MiddlewareHandler {
+export function requestContextMiddleware(params: { sessionHeader: string }): MiddlewareHandler {
   return async (c, next) => {
     const requestId = c.get('requestId') ?? 'local';
-    const agentIdentity = params.resolveAgentIdentity(c);
+    const agentIdentity = c.req.header('x-agent-identity') ?? null;
 
     if (!agentIdentity) {
       return c.json(

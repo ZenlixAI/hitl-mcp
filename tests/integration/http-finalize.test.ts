@@ -103,6 +103,19 @@ describe('http submit validation', () => {
     expect(payload.data.status).toBe('in_progress');
     expect(payload.data.pending_questions).toHaveLength(1);
     expect(payload.data.pending_questions[0].question_id).toBe(optionalQuestionId);
+    expect(payload.data.resolved_questions).toEqual([
+      {
+        question: expect.objectContaining({
+          question_id: requiredQuestionId,
+          title: 'required',
+          type: 'boolean',
+          status: 'answered',
+          answer: { value: true }
+        }),
+        status: 'answered',
+        answer: { value: true }
+      }
+    ]);
   });
 
   it('logs validation failures as structured warnings', async () => {

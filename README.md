@@ -205,7 +205,6 @@ Run with in-memory storage:
 ```bash
 docker run --rm -p 4000:4000 \
   -e MCP_URL=http://localhost:4000 \
-  -e HITL_API_KEY=change-me \
   hitl-mcp
 ```
 
@@ -216,7 +215,6 @@ docker run --rm -p 4000:4000 \
   -e MCP_URL=http://localhost:4000 \
   -e HITL_STORAGE=redis \
   -e HITL_REDIS_URL=redis://host.docker.internal:6379 \
-  -e HITL_API_KEY=change-me \
   hitl-mcp
 ```
 
@@ -224,7 +222,6 @@ docker run --rm -p 4000:4000 \
 
 ```bash
 export MCP_URL=http://localhost:4000
-export HITL_API_KEY=change-me
 npm run dev
 ```
 
@@ -233,7 +230,7 @@ npm run dev
 ```bash
 curl -X POST "http://localhost:4000/api/v1/questions" \
   -H "Content-Type: application/json" \
-  -H "x-api-key: change-me" \
+  -H "x-agent-identity: agent/example" \
   -H "x-agent-session-id: session-123" \
   -d '{
     "title": "Release decision",
@@ -250,8 +247,6 @@ curl -X POST "http://localhost:4000/api/v1/questions" \
   }'
 ```
 
-If `HITL_API_KEY` is not configured, use `x-agent-identity` instead of `x-api-key`.
-
 ---
 
 ## How interaction works
@@ -261,10 +256,11 @@ This section describes the intended runtime flow, regardless of whether the call
 ### Sequence 1: standard ask -> wait -> answer -> complete
 
 1. The Agent creates one or more questions in its caller scope.
-2. A UI or backend fetches pending questions for the same caller scope.
-3. A human answers one or more pending questions.
-4. The Agent waits on the scope.
-5. When the scope has no pending questions left, wait returns a terminal result.
+2. The Agent immediately calls `hitl_wait`.
+3. A UI or backend fetches pending questions for the same caller scope.
+4. A human answers one or more pending questions.
+5. The Agent waits on the scope.
+6. When the scope has no pending questions left, wait returns a terminal result.
 
 ### Sequence 2: partial submission
 
@@ -297,6 +293,12 @@ This is deliberate:
 - one Agent run may have multiple pending questions
 - the Agent usually cares whether the workflow can continue
 - scope-level wait avoids fragmented per-question synchronization logic
+
+Operational rule:
+
+- after every `hitl_ask`, the next HITL tool call must be `hitl_wait`
+- do not treat `hitl_ask` as completion
+- do not substitute `hitl_get_pending_questions` for the first post-ask wait
 
 ---
 
@@ -340,10 +342,13 @@ Typical response fields:
 - `is_terminal`
 - `changed_question_ids`
 - `pending_questions`
+- `resolved_questions`
 - `answered_question_ids`
 - `skipped_question_ids`
 - `cancelled_question_ids`
 - `is_complete`
+
+`resolved_questions` contains the full resolved question objects plus their final status and any stored answer.
 
 ### `hitl_get_pending_questions`
 
@@ -439,13 +444,11 @@ For question APIs, the server requires a session header on every caller-scoped r
 
 Identity rules:
 
-- if `HITL_API_KEY` is configured, send `x-api-key`
-- if `HITL_API_KEY` is not configured, send `x-agent-identity`
+- send `x-agent-identity` on every caller-scoped request
 
 Operationally:
 
-- with API key auth enabled, the server derives `agent_identity` from the API key principal
-- without API key auth, the caller must provide `x-agent-identity`
+- the server reads `agent_identity` directly from `x-agent-identity`
 
 ### `GET /api/v1/healthz`
 
@@ -591,8 +594,6 @@ The following environment variables are currently supported by the codebase.
 | `HITL_ANSWERED_RETENTION_SECONDS` | `2592000` | Retention window for answered state. | Change when auditability or storage pressure requires a different retention period. |
 | `HITL_PENDING_MAX_WAIT_SECONDS` | `0` | Maximum duration for one wait call. `0` means no timeout limit. | Change when you need bounded waits for worker scheduling or request lifecycle control. |
 | `HITL_WAIT_MODE` | `terminal_only` | Scope wait behavior: `terminal_only` or `progressive`. | Set to `progressive` when callers must react to each intermediate update. |
-| `HITL_API_KEY` | unset | Enables API key auth for `/mcp*` and question HTTP routes. | Set in any shared or production deployment. Leave unset only in trusted local environments. |
-| `HITL_AGENT_AUTH_MODE` | `api_key` | Agent identity mode in config surface. | Keep at default. The current code validates and loads it, but runtime behavior is not differentiated yet. |
 | `HITL_AGENT_SESSION_HEADER` | `x-agent-session-id` | Header name used to read `agent_session_id`. | Change when integrating with an existing gateway or client that uses another session header. |
 | `HITL_CREATE_CONFLICT_POLICY` | `error` | Create conflict policy in config surface. | Keep at default. The current code validates and loads it, but it is not currently applied by request handlers. |
 | `HITL_LOG_LEVEL` | `info` | Structured logging level: `debug`, `info`, `warn`, `error`. | Raise or lower verbosity to match debugging and production noise requirements. |
@@ -616,10 +617,7 @@ ttl:
 pending:
   maxWaitSeconds: 0
   waitMode: terminal_only
-security:
-  apiKey: change-me
 agentIdentity:
-  authMode: api_key
   sessionHeader: x-agent-session-id
   createConflictPolicy: error
 observability:
@@ -632,23 +630,23 @@ observability:
 ### Local development
 
 - `HITL_STORAGE=memory`
-- omit `HITL_API_KEY` if you want minimal setup
+- send `x-agent-identity` from your client or test harness
 - keep `HITL_WAIT_MODE=terminal_only`
 
 ### Shared dev or staging
 
 - `HITL_STORAGE=redis`
-- set `HITL_API_KEY`
 - set a real `MCP_URL`
 - use a distinct `HITL_REDIS_PREFIX`
+- ensure upstream callers always provide `x-agent-identity`
 
 ### Production
 
 - `HITL_STORAGE=redis`
-- set `HITL_API_KEY`
 - set `MCP_URL` to the externally reachable URL
 - wire readiness to `/api/v1/readyz`
 - review TTL and retention values explicitly
+- ensure upstream callers always provide `x-agent-identity`
 
 ---
 
@@ -661,6 +659,7 @@ observability:
 Each state-changing operation updates a scope snapshot containing:
 
 - pending questions
+- resolved questions with full question payloads and answers when available
 - answered question IDs
 - skipped question IDs
 - cancelled question IDs
@@ -696,7 +695,7 @@ That fallback is useful in local development, but production environments should
 For HTTP question APIs:
 
 - session identity comes from `HITL_AGENT_SESSION_HEADER`
-- caller identity comes either from `x-api-key` or `x-agent-identity`, depending on auth mode
+- caller identity comes from `x-agent-identity`
 
 For MCP tool calls:
 
@@ -750,7 +749,7 @@ Provides:
 
 For HTTP:
 
-1. auth and caller context middleware resolve identity and session
+1. caller context middleware resolves identity and session
 2. route handler validates input and calls `HitlService`
 3. repository updates state
 4. response is wrapped in the standard envelope
@@ -793,7 +792,7 @@ Before declaring a deployment healthy, verify:
 1. `MCP_URL` matches the externally reachable URL.
 2. The exposed HTTP port matches your runtime or ingress mapping.
 3. `HITL_STORAGE=redis` is paired with a reachable Redis instance.
-4. `HITL_API_KEY` is configured for non-local environments.
+4. Upstream callers send `x-agent-identity` and the configured session header.
 5. `/api/v1/healthz`, `/api/v1/readyz`, and `/api/v1/metrics` all respond as expected.
 
 ---

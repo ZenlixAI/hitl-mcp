@@ -32,8 +32,7 @@ Input questions must not include `question_id`. The server generates it and retu
 Headers:
 
 - `x-agent-session-id`
-- `x-agent-identity` when HTTP auth is not enabled
-- `x-api-key` when `HITL_API_KEY` is enabled
+- `x-agent-identity`
 
 Body:
 

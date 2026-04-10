@@ -1,19 +1,11 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { createRuntime } from '../../src/server/create-server';
 
 describe('GET /questions/pending', () => {
-  beforeEach(() => {
-    process.env.HITL_API_KEY = 'test-api-key';
-  });
-
-  afterEach(() => {
-    delete process.env.HITL_API_KEY;
-  });
-
-  it('returns pending questions for authenticated caller scope', async () => {
+  it('returns pending questions for caller scope from headers', async () => {
     const runtime = await createRuntime();
     const created = await runtime.repository.createPendingGroup({
-      agent_identity: 'api_key:test-api-key',
+      agent_identity: 'agent/runtime-1',
       agent_session_id: 'session-123',
       title: 'Current group',
       questions: [
@@ -24,7 +16,7 @@ describe('GET /questions/pending', () => {
 
     const res = await runtime.app.request('/api/v1/questions/pending', {
       headers: {
-        'x-api-key': 'test-api-key',
+        'x-agent-identity': 'agent/runtime-1',
         'x-agent-session-id': 'session-123'
       }
     });

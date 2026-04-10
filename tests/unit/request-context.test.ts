@@ -3,19 +3,10 @@ import { describe, expect, it } from 'vitest';
 import { requestContextMiddleware } from '../../src/http/middleware/request-context';
 
 describe('request context middleware', () => {
-  it('extracts agent identity from principal resolver and session id from header', async () => {
+  it('extracts agent identity and session id from headers', async () => {
     const app = new Hono();
 
-    app.use(
-      '*',
-      requestContextMiddleware({
-        sessionHeader: 'x-agent-session-id',
-        resolveAgentIdentity: (c) => {
-          const apiKey = c.req.header('x-api-key');
-          return apiKey === 'agent-key-1' ? 'agent/runtime-1' : null;
-        }
-      })
-    );
+    app.use('*', requestContextMiddleware({ sessionHeader: 'x-agent-session-id' }));
 
     app.get('/check', (c) =>
       c.json({
@@ -26,7 +17,7 @@ describe('request context middleware', () => {
 
     const res = await app.request('/check', {
       headers: {
-        'x-api-key': 'agent-key-1',
+        'x-agent-identity': 'agent/runtime-1',
         'x-agent-session-id': 'session-123'
       }
     });

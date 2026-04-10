@@ -94,15 +94,8 @@ function mapEnv(env: Record<string, string>): Partial<AppConfig> {
     } as AppConfig['pending'];
   }
 
-  if (env.HITL_API_KEY) {
-    mapped.security = { apiKey: env.HITL_API_KEY };
-  }
-
-  if (env.HITL_AGENT_AUTH_MODE || env.HITL_AGENT_SESSION_HEADER || env.HITL_CREATE_CONFLICT_POLICY) {
+  if (env.HITL_AGENT_SESSION_HEADER || env.HITL_CREATE_CONFLICT_POLICY) {
     mapped.agentIdentity = {
-      ...(env.HITL_AGENT_AUTH_MODE
-        ? { authMode: env.HITL_AGENT_AUTH_MODE as AppConfig['agentIdentity']['authMode'] }
-        : {}),
       ...(env.HITL_AGENT_SESSION_HEADER
         ? { sessionHeader: env.HITL_AGENT_SESSION_HEADER }
         : {}),

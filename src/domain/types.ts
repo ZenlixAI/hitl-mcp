@@ -30,6 +30,11 @@ export type ScopedQuestionGroup = CallerScope & {
 
 export type ScopeQuestionSnapshot = {
   pending_questions: Array<Record<string, unknown>>;
+  resolved_questions: Array<{
+    question: Record<string, unknown>;
+    status: PublicQuestionStatus;
+    answer?: unknown;
+  }>;
   answered_question_ids: string[];
   skipped_question_ids: string[];
   cancelled_question_ids: string[];
