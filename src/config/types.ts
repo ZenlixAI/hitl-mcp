@@ -26,11 +26,7 @@ export const appConfigSchema = z.object({
     maxWaitSeconds: z.number().int().nonnegative(),
     waitMode: z.enum(['terminal_only', 'progressive'])
   }),
-  security: z.object({
-    apiKey: z.string().min(1).optional()
-  }),
   agentIdentity: z.object({
-    authMode: z.enum(['api_key', 'bearer']),
     sessionHeader: z.string().min(1),
     createConflictPolicy: z.enum(['error', 'reuse_pending'])
   }),

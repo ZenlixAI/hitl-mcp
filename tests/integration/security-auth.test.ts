@@ -1,40 +1,42 @@
-import { afterEach, beforeEach, describe, expect, it } from 'vitest';
+import { describe, expect, it } from 'vitest';
 import { createHttpApp } from '../../src/server/create-server';
 
-describe('security auth middleware', () => {
-  beforeEach(() => {
-    process.env.HITL_API_KEY = 'test-api-key';
-  });
-
-  afterEach(() => {
-    delete process.env.HITL_API_KEY;
-  });
-
-  it('returns 401 when api key is missing', async () => {
+describe('caller context middleware', () => {
+  it('returns 401 when agent identity header is missing', async () => {
     const app = await createHttpApp();
-    const res = await app.request('/api/v1/questions/q_1');
-    expect(res.status).toBe(401);
-  });
-
-  it('returns non-401 when api key is present', async () => {
-    const app = await createHttpApp();
-    const res = await app.request('/api/v1/questions/q_1', {
-      headers: { 'x-api-key': 'test-api-key' }
+    const res = await app.request('/api/v1/questions/pending', {
+      headers: {
+        'x-agent-session-id': 'session-1'
+      }
     });
 
-    expect(res.status).toBe(404);
-  });
-});
-
-describe('security auth optional mode', () => {
-  afterEach(() => {
-    delete process.env.HITL_API_KEY;
+    expect(res.status).toBe(401);
+    const body = await res.json();
+    expect(body.error.code).toBe('AGENT_IDENTITY_REQUIRED');
   });
 
-  it('allows unauthenticated access when HITL_API_KEY is not set', async () => {
-    delete process.env.HITL_API_KEY;
+  it('returns 400 when agent session header is missing', async () => {
     const app = await createHttpApp();
-    const res = await app.request('/api/v1/questions/q_1');
+    const res = await app.request('/api/v1/questions/pending', {
+      headers: {
+        'x-agent-identity': 'agent/test-1'
+      }
+    });
+
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error.code).toBe('AGENT_SESSION_ID_REQUIRED');
+  });
+
+  it('allows access when both agent identity and session headers are present', async () => {
+    const app = await createHttpApp();
+    const res = await app.request('/api/v1/questions/q_1', {
+      headers: {
+        'x-agent-identity': 'agent/test-1',
+        'x-agent-session-id': 'session-1'
+      }
+    });
+
     expect(res.status).toBe(404);
   });
 });

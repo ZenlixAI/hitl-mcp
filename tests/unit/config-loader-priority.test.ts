@@ -51,16 +51,14 @@ describe('config loader file priority', () => {
     expect(config.pending.maxWaitSeconds).toBe(333);
   });
 
-  it('loads agent identity auth mode, session header, and conflict policy from env', async () => {
+  it('loads agent identity session header and conflict policy from env', async () => {
     const config = await resolveConfig({
       env: {
-        HITL_AGENT_AUTH_MODE: 'api_key',
         HITL_AGENT_SESSION_HEADER: 'x-agent-session-id',
         HITL_CREATE_CONFLICT_POLICY: 'error'
       }
     });
 
-    expect(config.agentIdentity.authMode).toBe('api_key');
     expect(config.agentIdentity.sessionHeader).toBe('x-agent-session-id');
     expect(config.agentIdentity.createConflictPolicy).toBe('error');
   });

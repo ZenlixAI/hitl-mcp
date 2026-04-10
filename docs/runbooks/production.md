@@ -12,7 +12,7 @@
 
 1. Confirm Redis is reachable if `HITL_STORAGE=redis`.
 2. Confirm `MCP_URL` and exposed port are correct.
-3. If auth is required, set `HITL_API_KEY`; leave unset for optional no-auth mode.
+3. Ensure callers always send `x-agent-identity` and the configured session header.
 4. Run smoke checks:
    - `GET /api/v1/healthz`
    - `GET /api/v1/readyz`

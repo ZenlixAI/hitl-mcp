@@ -10,5 +10,6 @@ ttl:
   answeredRetentionSeconds: 2592000
 pending:
   maxWaitSeconds: 0
-security:
-  apiKey: change-me
+agentIdentity:
+  sessionHeader: x-agent-session-id
+  createConflictPolicy: error

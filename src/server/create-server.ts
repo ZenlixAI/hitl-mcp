@@ -1,11 +1,10 @@
 import { MCPServer } from 'mcp-use/server';
 import { loadConfig } from '../config/load-config';
 import { HitlService } from '../core/hitl-service';
-import { apiKeyAuth, resolveApiKeyPrincipal } from '../http/middleware/auth';
 import { requestContextMiddleware } from '../http/middleware/request-context';
 import { requestIdMiddleware } from '../http/middleware/request-id';
 import { questionRoutes } from '../http/routes/questions';
-import { ok } from '../http/response';
+import { fail, ok } from '../http/response';
 import { injectCallerScopeIntoMcpState } from '../mcp/caller-scope';
 import { registerHitlTools } from '../mcp/register-tools';
 import { Logger } from '../observability/logger';
@@ -130,27 +129,11 @@ export async function createRuntime() {
     });
   });
 
-  const apiKey = config.security.apiKey;
   const questionContext = requestContextMiddleware({
-    sessionHeader: config.agentIdentity.sessionHeader,
-    resolveAgentIdentity: (c) =>
-      c.get('agentIdentity') ??
-      resolveApiKeyPrincipal(c, apiKey ?? '') ??
-      c.req.header('x-agent-identity') ??
-      null
+    sessionHeader: config.agentIdentity.sessionHeader
   });
 
-  if (apiKey) {
-    app.use('/mcp*', apiKeyAuth(apiKey));
-    app.use(
-      '/mcp*',
-      requestContextMiddleware({
-        sessionHeader: config.agentIdentity.sessionHeader,
-        resolveAgentIdentity: (c) => c.get('agentIdentity') ?? resolveApiKeyPrincipal(c, apiKey)
-      })
-    );
-    app.use(`${config.http.apiPrefix}/questions/*`, apiKeyAuth(apiKey));
-  }
+  app.use('/mcp*', questionContext);
 
   app.use(`${config.http.apiPrefix}/questions`, questionContext);
   app.use(`${config.http.apiPrefix}/questions/pending`, questionContext);

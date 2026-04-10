@@ -205,7 +205,6 @@ docker build -t hitl-mcp .
 ```bash
 docker run --rm -p 4000:4000 \
   -e MCP_URL=http://localhost:4000 \
-  -e HITL_API_KEY=change-me \
   hitl-mcp
 ```
 
@@ -216,7 +215,6 @@ docker run --rm -p 4000:4000 \
   -e MCP_URL=http://localhost:4000 \
   -e HITL_STORAGE=redis \
   -e HITL_REDIS_URL=redis://host.docker.internal:6379 \
-  -e HITL_API_KEY=change-me \
   hitl-mcp
 ```
 
@@ -224,7 +222,6 @@ docker run --rm -p 4000:4000 \
 
 ```bash
 export MCP_URL=http://localhost:4000
-export HITL_API_KEY=change-me
 npm run dev
 ```
 
@@ -233,7 +230,7 @@ npm run dev
 ```bash
 curl -X POST "http://localhost:4000/api/v1/questions" \
   -H "Content-Type: application/json" \
-  -H "x-api-key: change-me" \
+  -H "x-agent-identity: agent/example" \
   -H "x-agent-session-id: session-123" \
   -d '{
     "title": "Release decision",
@@ -249,8 +246,6 @@ curl -X POST "http://localhost:4000/api/v1/questions" \
     ]
   }'
 ```
-
-如果没有配置 `HITL_API_KEY`，则使用 `x-agent-identity` 代替 `x-api-key`。
 
 ---
 
@@ -437,13 +432,11 @@ HTTP 控制面主要面向运营界面、业务后端和排障工具。
 
 身份规则：
 
-- 如果配置了 `HITL_API_KEY`，则发送 `x-api-key`
-- 如果未配置 `HITL_API_KEY`，则发送 `x-agent-identity`
+- 所有 caller-scoped 请求都发送 `x-agent-identity`
 
 行为上：
 
-- 启用 API key 鉴权时，服务端会从 API key principal 推导 `agent_identity`
-- 未启用 API key 鉴权时，调用方必须显式提供 `x-agent-identity`
+- 服务端直接从 `x-agent-identity` 读取 `agent_identity`
 
 ### `GET /api/v1/healthz`
 
@@ -589,8 +582,6 @@ HTTP 控制面主要面向运营界面、业务后端和排障工具。
 | `HITL_ANSWERED_RETENTION_SECONDS` | `2592000` | 已回答状态的保留时长。 | 当审计需求或存储压力要求不同保留策略时。 |
 | `HITL_PENDING_MAX_WAIT_SECONDS` | `0` | 单次 wait 的最大时长。`0` 表示不限制。 | 当你需要控制 worker 占用时长或请求生命周期上限时。 |
 | `HITL_WAIT_MODE` | `terminal_only` | scope wait 行为：`terminal_only` 或 `progressive`。 | 当调用方需要感知每一次中间变化时设置为 `progressive`。 |
-| `HITL_API_KEY` | 未设置 | 为 `/mcp*` 和 question HTTP routes 启用 API key 鉴权。 | 所有共享环境和生产环境都应设置。本地可信环境可不设。 |
-| `HITL_AGENT_AUTH_MODE` | `api_key` | 配置面中的 Agent 身份模式。 | 建议保持默认。当前代码会加载并校验，但运行时尚未区分行为。 |
 | `HITL_AGENT_SESSION_HEADER` | `x-agent-session-id` | 读取 `agent_session_id` 的 header 名称。 | 当你接入现有网关或客户端，需要复用其他 session header 时。 |
 | `HITL_CREATE_CONFLICT_POLICY` | `error` | 配置面中的创建冲突策略。 | 建议保持默认。当前代码会加载并校验，但 handler 尚未实际使用。 |
 | `HITL_LOG_LEVEL` | `info` | 结构化日志级别：`debug`、`info`、`warn`、`error`。 | 需要排障时提高，生产环境需要降噪时调低。 |
@@ -614,10 +605,7 @@ ttl:
 pending:
   maxWaitSeconds: 0
   waitMode: terminal_only
-security:
-  apiKey: change-me
 agentIdentity:
-  authMode: api_key
   sessionHeader: x-agent-session-id
   createConflictPolicy: error
 observability:
@@ -630,23 +618,23 @@ observability:
 ### 本地开发
 
 - `HITL_STORAGE=memory`
-- 如果只想最快跑起来，可以不设 `HITL_API_KEY`
+- 让客户端或测试工具显式发送 `x-agent-identity`
 - `HITL_WAIT_MODE` 保持 `terminal_only`
 
 ### 共享开发环境或测试环境
 
 - `HITL_STORAGE=redis`
-- 设置 `HITL_API_KEY`
 - 配置真实可达的 `MCP_URL`
 - 使用独立的 `HITL_REDIS_PREFIX`
+- 确保上游调用方始终发送 `x-agent-identity`
 
 ### 生产环境
 
 - `HITL_STORAGE=redis`
-- 设置 `HITL_API_KEY`
 - 将 `MCP_URL` 设为外部真实可达 URL
 - readiness 探针接 `/api/v1/readyz`
 - 明确评审 TTL 和 retention 配置
+- 确保上游调用方始终发送 `x-agent-identity`
 
 ---
 
@@ -694,7 +682,7 @@ observability:
 对于 HTTP question APIs：
 
 - session 身份来自 `HITL_AGENT_SESSION_HEADER`
-- caller identity 来自 `x-api-key` 或 `x-agent-identity`
+- caller identity 来自 `x-agent-identity`
 
 对于 MCP tool calls：
 
@@ -792,7 +780,7 @@ observability:
 1. `MCP_URL` 与外部真实可达地址一致。
 2. 暴露端口与运行环境或 ingress 映射一致。
 3. `HITL_STORAGE=redis` 时，Redis 实例真实可达。
-4. 非本地环境已设置 `HITL_API_KEY`。
+4. 上游调用方会发送 `x-agent-identity` 和配置中的 session header。
 5. `/api/v1/healthz`、`/api/v1/readyz`、`/api/v1/metrics` 都能正确响应。
 
 ---
