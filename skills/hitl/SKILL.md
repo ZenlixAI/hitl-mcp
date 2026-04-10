@@ -14,9 +14,11 @@ The current public model is question-only:
 - ask questions
 - read pending questions in caller scope
 - submit partial answers or skips
-- wait on scope progress when blocking is needed
+- wait on scope progress after asking whenever the agent needs the human answer before continuing
 
 Do not model public workflows around request IDs, groups, or interactions.
+
+Critical rule: after `hitl_ask`, call `hitl_wait` unless you are explicitly handing the workflow off to another asynchronous actor and do not need the human answer in this agent run. Asking alone only creates pending questions; it does not consume human feedback.
 
 ## Caller Scope
 
@@ -30,11 +32,13 @@ The server uses caller scope to isolate pending questions and wait behavior.
 ## MCP Workflow
 
 1. Call `hitl_ask`.
-2. Continue asynchronously, or call `hitl_wait` if blocking semantics are needed.
+2. Call `hitl_wait` immediately if the current agent run needs the human answer before it can continue.
 3. Use `hitl_get_pending_questions` to render or recover current pending state.
 4. Submit newly answered questions with `hitl_submit_answers`.
 5. Optionally skip optional questions with `skipped_question_ids`.
 6. Use `hitl_cancel_questions` if pending questions should be cancelled.
+
+Only skip the immediate wait when the intent is explicitly fire-and-forget, for example when another process or UI will handle the pending questions and this agent run should continue without the answer.
 
 ## Tool Reference
 
@@ -54,6 +58,8 @@ Configured by `HITL_WAIT_MODE`:
 
 In progressive mode, call `hitl_wait` again after each response if you still need to observe progress.
 
+Do not treat `hitl_ask` as completion. A correct blocking HITL flow is ask -> wait -> inspect returned progress -> continue or wait again.
+
 ## Rules
 
 - Do not send `question_id` when asking questions. The server generates it.
@@ -61,6 +67,7 @@ In progressive mode, call `hitl_wait` again after each response if you still nee
 - Partial submission is allowed.
 - Optional questions need an explicit skip action if they should be marked ignored.
 - Required questions cannot be skipped.
+- If the agent needs a human decision, do not stop after `hitl_ask`; wait for scope progress with `hitl_wait`.
 - Do not invent public request/group identifiers in agent logic.
 
 ## Minimal Example
