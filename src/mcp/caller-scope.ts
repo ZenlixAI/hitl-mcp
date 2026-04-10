@@ -11,7 +11,8 @@ export function injectCallerScopeIntoMcpState(
     throw new DomainError('AGENT_IDENTITY_REQUIRED', 'agent identity required');
   }
 
-  const agentIdentity = requestContext.get('agentIdentity');
+  const agentIdentity =
+    requestContext.get('agentIdentity') ?? requestContext.req.header('x-agent-identity');
 
   if (!agentIdentity) {
     throw new DomainError('AGENT_IDENTITY_REQUIRED', 'agent identity required');

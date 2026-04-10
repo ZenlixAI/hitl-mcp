@@ -37,6 +37,39 @@ describe('mcp caller scope bridge', () => {
     });
   });
 
+  it('falls back to request headers when caller scope was not pre-populated on context', async () => {
+    const app = new Hono();
+
+    app.get('/check', async (c) => {
+      const mcpContext: MiddlewareContext = {
+        method: 'tools/call',
+        params: { name: 'hitl_ask' },
+        state: new Map()
+      };
+
+      const caller = await runWithContext(c, async () => {
+        injectCallerScopeIntoMcpState(mcpContext, { sessionHeader: 'x-agent-session-id' });
+        return readCallerScopeFromMcpContext(mcpContext);
+      });
+
+      return c.json(caller);
+    });
+
+    const res = await app.request('/check', {
+      headers: {
+        'x-agent-identity': 'agent/from-header',
+        'x-agent-session-id': 'session-from-header'
+      }
+    });
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body).toEqual({
+      agent_identity: 'agent/from-header',
+      agent_session_id: 'session-from-header'
+    });
+  });
+
   it('rejects missing agent session id in mcp request context', async () => {
     const app = new Hono();
 
