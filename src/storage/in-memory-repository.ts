@@ -22,6 +22,18 @@ export class InMemoryHitlRepository implements HitlRepository {
     };
   }
 
+  private resolvedQuestion(group: ScopedQuestionGroup, question: Record<string, unknown>) {
+    const publicQuestion = this.publicQuestion(group, question);
+    const status = String(publicQuestion.status ?? 'pending') as 'answered' | 'skipped' | 'cancelled';
+    return {
+      question: publicQuestion,
+      status,
+      ...(Object.prototype.hasOwnProperty.call(question, 'answer')
+        ? { answer: question.answer }
+        : {})
+    };
+  }
+
   private pendingSet(scopeKey: string) {
     const current = this.pendingByScope.get(scopeKey);
     if (current) return current;
@@ -170,6 +182,7 @@ export class InMemoryHitlRepository implements HitlRepository {
         group.agent_session_id === caller.agent_session_id
     );
     const pendingQuestions: Array<Record<string, unknown>> = [];
+    const resolvedQuestions: ScopeQuestionSnapshot['resolved_questions'] = [];
     const answeredQuestionIds: string[] = [];
     const skippedQuestionIds: string[] = [];
     const cancelledQuestionIds: string[] = [];
@@ -178,14 +191,24 @@ export class InMemoryHitlRepository implements HitlRepository {
       for (const question of group.questions as Array<Record<string, unknown>>) {
         const status = question.status as string;
         if (status === 'pending') pendingQuestions.push(this.publicQuestion(group, question));
-        if (status === 'answered') answeredQuestionIds.push(String(question.question_id));
-        if (status === 'skipped') skippedQuestionIds.push(String(question.question_id));
-        if (status === 'cancelled') cancelledQuestionIds.push(String(question.question_id));
+        if (status === 'answered') {
+          answeredQuestionIds.push(String(question.question_id));
+          resolvedQuestions.push(this.resolvedQuestion(group, question));
+        }
+        if (status === 'skipped') {
+          skippedQuestionIds.push(String(question.question_id));
+          resolvedQuestions.push(this.resolvedQuestion(group, question));
+        }
+        if (status === 'cancelled') {
+          cancelledQuestionIds.push(String(question.question_id));
+          resolvedQuestions.push(this.resolvedQuestion(group, question));
+        }
       }
     }
 
     return {
       pending_questions: pendingQuestions,
+      resolved_questions: resolvedQuestions,
       answered_question_ids: answeredQuestionIds,
       skipped_question_ids: skippedQuestionIds,
       cancelled_question_ids: cancelledQuestionIds,

@@ -58,6 +58,19 @@ Possible output:
   "is_terminal": false,
   "changed_question_ids": ["q_canary"],
   "pending_questions": [],
+  "resolved_questions": [
+    {
+      "question": {
+        "question_id": "q_canary",
+        "type": "boolean",
+        "title": "Can we deploy?",
+        "status": "answered",
+        "answer": { "value": true }
+      },
+      "status": "answered",
+      "answer": { "value": true }
+    }
+  ],
   "answered_question_ids": ["q_canary"],
   "skipped_question_ids": [],
   "cancelled_question_ids": [],
@@ -106,6 +119,24 @@ Output:
   "is_terminal": true,
   "changed_question_ids": ["q_01JXYZ...", "q_01JABC..."],
   "pending_questions": [],
+  "resolved_questions": [
+    {
+      "question": {
+        "question_id": "q_01JXYZ...",
+        "status": "answered",
+        "answer": { "value": "yes" }
+      },
+      "status": "answered",
+      "answer": { "value": "yes" }
+    },
+    {
+      "question": {
+        "question_id": "q_01JABC...",
+        "status": "skipped"
+      },
+      "status": "skipped"
+    }
+  ],
   "answered_question_ids": ["q_01JXYZ..."],
   "skipped_question_ids": ["q_01JABC..."],
   "cancelled_question_ids": [],

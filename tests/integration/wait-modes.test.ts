@@ -104,6 +104,19 @@ describe('wait modes', () => {
     expect(firstEvent.status).toBe('in_progress');
     expect(firstEvent.is_terminal).toBe(false);
     expect(firstEvent.changed_question_ids).toEqual([firstQuestionId]);
+    expect(firstEvent.resolved_questions).toEqual([
+      {
+        question: expect.objectContaining({
+          question_id: firstQuestionId,
+          title: 'First?',
+          type: 'boolean',
+          status: 'answered',
+          answer: { value: true }
+        }),
+        status: 'answered',
+        answer: { value: true }
+      }
+    ]);
 
     const secondWait = service.wait({ caller });
     await app.request('/api/v1/questions/answers', {
@@ -122,5 +135,31 @@ describe('wait modes', () => {
     expect(secondEvent.status).toBe('completed');
     expect(secondEvent.is_terminal).toBe(true);
     expect(secondEvent.changed_question_ids).toEqual([secondQuestionId]);
+    expect(secondEvent.resolved_questions).toEqual(
+      expect.arrayContaining([
+        {
+          question: expect.objectContaining({
+            question_id: firstQuestionId,
+            title: 'First?',
+            type: 'boolean',
+            status: 'answered',
+            answer: { value: true }
+          }),
+          status: 'answered',
+          answer: { value: true }
+        },
+        {
+          question: expect.objectContaining({
+            question_id: secondQuestionId,
+            title: 'Second?',
+            type: 'boolean',
+            status: 'answered',
+            answer: { value: false }
+          }),
+          status: 'answered',
+          answer: { value: false }
+        }
+      ])
+    );
   });
 });
