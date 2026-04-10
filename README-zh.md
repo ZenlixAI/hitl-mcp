@@ -1,6 +1,6 @@
 # hitl-mcp
 
-面向 Agent 工作流的 question-only HITL MCP 服务。
+面向 Agent 工作流的纯问答式 HITL MCP 服务。
 
 [![TypeScript](https://img.shields.io/badge/TypeScript-5.9-blue.svg)](https://www.typescriptlang.org/)
 [![MCP](https://img.shields.io/badge/MCP-Protocol-green.svg)](https://modelcontextprotocol.io/)
@@ -18,11 +18,11 @@
 - [非目标](#非目标)
 - [核心模型](#核心模型)
 - [快速开始](#快速开始)
-- [交互如何工作](#交互如何工作)
+- [交互流程](#交互流程)
 - [MCP 工具](#mcp-工具)
 - [HTTP API](#http-api)
 - [运行时配置](#运行时配置)
-- [内部工作原理](#内部工作原理)
+- [内部原理](#内部原理)
 - [架构](#架构)
 - [运维](#运维)
 - [项目结构](#项目结构)
@@ -31,102 +31,102 @@
 
 ## 背景
 
-在很多 Agent 系统里，Agent 运行到某个阶段后无法继续完全自动执行：
+在许多 Agent 系统中，Agent 运行到一定阶段后往往无法继续自主执行：
 
 - 需要人工批准或驳回某个决策
-- 需要人工在多个候选项中做选择
-- 需要人工补充业务输入
-- 需要工作流暂停，直到人工确认返回
+- 需要人工在多个候选项中进行选择
+- 需要人工补充业务所需的输入信息
+- 需要工作流暂停，等待人工确认后才能继续
 
-如果没有专门的 HITL 层，这类流程通常会落到零散 prompt、旁路 UI 或自定义回调协议上，最终会出现三个典型问题：
+如果没有专门的 HITL 层，这类流程通常只能通过临时 prompt、旁路 UI 或自定义回调协议来实现，这会带来三个典型问题：
 
-1. Agent 与业务系统之间没有统一的“待人工处理”模型。
-2. 人工回答难以和具体的 Agent 运行实例、会话上下文正确关联。
-3. wait、部分提交、取消、恢复等语义在不同客户端之间无法保持一致。
+1. Agent 与业务系统之间缺乏统一的"待人工处理"模型
+2. 人工回答难以与具体的 Agent 运行实例、会话上下文正确关联
+3. 等待、部分提交、取消、恢复等语义在不同客户端之间无法保持一致
 
-`hitl-mcp` 的目标就是把这件事收敛成一个很窄但清晰的契约：
+`hitl-mcp` 通过一套精简而明确的契约来解决这些问题：
 
-- Agent 发起问题
+- Agent 创建问题
 - 客户端或运营界面读取待处理问题
-- 人类回答、跳过或取消这些问题
-- Agent 通过 caller scope 级别的状态机等待流程完成
+- 人工回答、跳过或取消这些问题
+- Agent 在 caller scope 级别的状态机上等待流程完成
 
 ---
 
 ## 什么是 hitl-mcp
 
-`hitl-mcp` 是一个同时提供 **MCP** 与 **HTTP** 两种接入面的人工介入服务。
+`hitl-mcp` 是一个同时提供 **MCP** 与 **HTTP** 两种接入方式的人工介入服务。
 
-它通过同一份底层状态，对外提供两类能力：
+基于同一底层状态，对外提供两类接口：
 
-- **MCP tools**：给 Agent 和 Agent 平台直接调用
-- **HTTP APIs**：给运营后台、业务后端或自定义审批界面调用
+- **MCP 工具**：供 Agent 和 Agent 平台直接调用
+- **HTTP API**：供运营后台、业务后端或自定义审批界面调用
 
-这个服务对外暴露的抽象非常克制：
+对外暴露的抽象非常精简：
 
-- 对外公共单元只有 `question`
-- question 总是属于某个 **caller scope**
-- answer 可以分批提交
-- wait 是 scope 级别的操作，不是 question 级别的长轮询
+- 核心单元只有 `question`
+- question 始终属于某个 **caller scope**
+- 支持分批提交答案
+- 等待是 scope 级别的操作，而非 question 级别的长轮询
 
-它适用于“Agent 发起、人工补全决策回路”的工作流。
+适用于"Agent 发起、人工补全决策回路"的工作流场景。
 
 ---
 
 ## 设计目标
 
-- 为 Agent 工作流提供稳定、最小化的 HITL 协议面。
-- 用 `agent_identity` 和 `agent_session_id` 明确 caller 隔离边界。
-- 支持同一个 caller scope 中同时存在多个 pending questions。
-- 支持增量提交，而不是强制一次性交付全部答案。
-- 让 MCP 客户端和 HTTP 客户端共享同一份 question 状态。
-- 让本地开发可以使用 memory，生产环境可以切换到 Redis。
-- 通过 health、readiness、metrics 和结构化日志提升可运维性。
+- 为 Agent 工作流提供稳定、最小化的 HITL 协议接口
+- 通过 `agent_identity` 和 `agent_session_id` 明确 caller 隔离边界
+- 支持同一 caller scope 中同时存在多个 pending 问题
+- 支持增量提交，而非强制一次性交付全部答案
+- 让 MCP 客户端和 HTTP 客户端操作同一 question 状态
+- 存储可插拔：本地开发使用内存，生产环境使用 Redis
+- 通过健康检查、就绪检查、指标和结构化日志提升可观测性
 
 ---
 
 ## 非目标
 
-- 不是通用工作流引擎。
-- 不是审批 UI 框架。
-- 不是任务队列或事件总线。
-- 不是通用表单搭建系统。
-- 不是权限策略系统，也不负责任务分派。
-- 不是面向任意业务流程的完整编排平台。
+- 不是通用工作流引擎
+- 不是审批 UI 框架
+- 不是任务队列或事件总线
+- 不是通用表单搭建系统
+- 不是权限策略系统，也不负责任务分派
+- 不是面向任意业务流程的完整编排平台
 
-`hitl-mcp` 只负责 question 状态、caller scope、wait 语义和 answer 提交。
+`hitl-mcp` 只负责 question 状态管理、caller scope、等待语义和答案提交。
 
 ---
 
 ## 核心模型
 
-### 对外公共单元：question
+### 对外单元：question
 
-系统对外只暴露 `question`。
+系统对外仅暴露 `question`。
 
 一个 question 包含：
 
 - 服务端生成的 `question_id`
-- `type`
-- `title`、`description`、`tags`、`extra` 等提示元数据
+- `type`（问题类型）
+- `title`、`description`、`tags`、`extra` 等提示信息
 - `pending`、`answered`、`skipped`、`cancelled` 等状态
 
 当前支持的问题类型：
 
-- `single_choice`
-- `multi_choice`
-- `text`
-- `boolean`
-- `range`
+- `single_choice`（单选）
+- `multi_choice`（多选）
+- `text`（文本）
+- `boolean`（布尔）
+- `range`（范围）
 
 ### Caller scope
 
-每个操作都绑定到下面这组 caller scope：
+每个操作都绑定到以下 caller scope：
 
 - `agent_identity`
 - `agent_session_id`
 
-这个 scope 是以下行为的隔离边界：
+该 scope 是以下行为的隔离边界：
 
 - 创建问题
 - 获取待处理问题
@@ -134,13 +134,13 @@
 - 提交答案
 - 取消问题
 
-只要 caller scope 不同，两个 Agent 即使创建出内容完全相同的问题，也不会互相冲突。
+只要 caller scope 不同，两个 Agent 即使创建内容完全相同的问题，也不会相互冲突。
 
 ### 内部分组与公共 API 的关系
 
-存储层内部仍然可以保留 group 结构，但那只是实现细节。
+存储层内部仍可保留 group 结构，但这只是实现细节。
 
-公共 API 被刻意设计成 question-first：
+公共 API 被刻意设计为以 question 为核心：
 
 - 创建 questions
 - 读取 pending questions
@@ -150,7 +150,7 @@
 
 ### 部分提交
 
-答案不要求一次性全部提交。
+答案不需要一次性全部提交。
 
 服务端接受增量进度：
 
@@ -159,20 +159,20 @@
 - 显式跳过可选问题
 - 持续 wait，直到当前 scope 完成
 
-### Wait 模式
+### 等待模式
 
-`hitl_wait` 以及等价的 scope 级等待行为支持两种模式：
+`hitl_wait` 及等价的 scope 级等待支持两种模式：
 
-- `terminal_only`：只有当 scope 下没有 pending questions 时才返回
-- `progressive`：每次状态变化都返回一次，调用方可以继续 wait
+- `terminal_only`：仅当 scope 下没有 pending questions 时才返回
+- `progressive`：每次状态变化都返回一次，调用方可继续 wait
 
-`terminal_only` 适合线性流程。`progressive` 适合调用方需要对中间进度做实时响应的场景。
+`terminal_only` 适合线性流程；`progressive` 适合调用方需要对中间进度做实时响应的场景。
 
 ---
 
 ## 快速开始
 
-## 安装
+### 安装
 
 ```bash
 git clone <your-repo-url>
@@ -180,19 +180,19 @@ cd hitl-mcp
 npm install
 ```
 
-## 本地开发运行
+### 本地开发运行
 
 ```bash
 npm run dev
 ```
 
-默认本地监听：
+默认本地监听地址：
 
 - HTTP base URL: `http://0.0.0.0:4000`
 - MCP base URL: `http://0.0.0.0:4000/mcp`
 - HTTP API prefix: `/api/v1`
 
-## 使用 Docker 运行
+### 使用 Docker 运行
 
 构建镜像：
 
@@ -218,14 +218,14 @@ docker run --rm -p 4000:4000 \
   hitl-mcp
 ```
 
-## 从源码配环境变量运行
+### 从源码配置环境变量运行
 
 ```bash
 export MCP_URL=http://localhost:4000
 npm run dev
 ```
 
-## 最小创建示例
+### 最小创建示例
 
 ```bash
 curl -X POST "http://localhost:4000/api/v1/questions" \
@@ -249,11 +249,11 @@ curl -X POST "http://localhost:4000/api/v1/questions" \
 
 ---
 
-## 交互如何工作
+## 交互流程
 
-这一节描述的是推荐运行时流程，不区分调用方最终走的是 MCP 还是 HTTP。
+本节描述推荐的运行时流程，无论调用方最终使用 MCP 还是 HTTP。
 
-### 时序 1：标准 ask -> wait -> answer -> complete
+### 流程 1：标准 ask -> wait -> answer -> complete
 
 1. Agent 在自己的 caller scope 下创建一个或多个问题。
 2. Agent 立即调用 `hitl_wait`。
@@ -262,15 +262,15 @@ curl -X POST "http://localhost:4000/api/v1/questions" \
 5. Agent 对该 scope 执行 wait。
 6. 当 scope 下不再有 pending questions 时，wait 返回 terminal 结果。
 
-### 时序 2：部分提交
+### 流程 2：部分提交
 
-1. Agent 一次创建多个问题。
-2. 人类只回答其中一部分。
-3. 服务端保存已提交的答案，未回答的问题继续保持 pending。
-4. Agent 可以继续 wait。
-5. 后续提交持续累积，直到整个 scope 完成。
+1. Agent 一次创建多个问题
+2. 人工只回答其中一部分
+3. 服务端保存已提交的答案，未回答的问题继续保持 pending
+4. Agent 可以继续 wait
+5. 后续提交持续累积，直到整个 scope 完成
 
-### 时序 3：progressive wait
+### 流程 3：progressive wait
 
 1. 设置 `HITL_WAIT_MODE=progressive`
 2. Agent 调用 `hitl_wait`
@@ -278,19 +278,19 @@ curl -X POST "http://localhost:4000/api/v1/questions" \
 4. wait 结果会带回本次变化的 `question_id`
 5. Agent 决定是继续 wait，还是先处理这次中间结果
 
-### 时序 4：取消
+### 流程 4：取消
 
-1. 调用方取消一个问题，或取消当前 scope 下所有 pending questions。
-2. 服务端更新 scope 状态并通知 waiter。
-3. 如果 scope 下不再有 pending questions，则该 scope 进入 terminal 状态。
+1. 调用方取消一个问题，或取消当前 scope 下所有 pending questions
+2. 服务端更新 scope 状态并通知 waiter
+3. 如果 scope 下不再有 pending questions，则该 scope 进入 terminal 状态
 
 ### 为什么 wait 是 scope 级别
 
 wait 始终是 **scope 级操作**，这是有意为之：
 
 - 一个 Agent 运行实例可能同时挂起多个问题
-- Agent 真正关心的通常是“当前流程能否继续”
-- 以 scope 为单位等待，可以避免大量碎片化的逐 question 同步逻辑
+- Agent 真正关心的通常是"当前流程能否继续"
+- 以 scope 为单位等待，可避免大量碎片化的逐 question 同步逻辑
 
 执行规则：
 
@@ -302,7 +302,7 @@ wait 始终是 **scope 级操作**，这是有意为之：
 
 ## MCP 工具
 
-`hitl-mcp` 当前暴露以下 MCP tools：
+`hitl-mcp` 当前暴露以下 MCP 工具：
 
 ### `hitl_ask`
 
@@ -444,7 +444,7 @@ HTTP 控制面主要面向运营界面、业务后端和排障工具。
 
 - 所有 caller-scoped 请求都发送 `x-agent-identity`
 
-行为上：
+行为说明：
 
 - 服务端直接从 `x-agent-identity` 读取 `agent_identity`
 
@@ -561,7 +561,7 @@ HTTP 控制面主要面向运营界面、业务后端和排障工具。
 
 ## 运行时配置
 
-## 配置来源与优先级
+### 配置来源与优先级
 
 配置按以下顺序加载：
 
@@ -572,9 +572,9 @@ HTTP 控制面主要面向运营界面、业务后端和排障工具。
 
 后者覆盖前者。
 
-## 环境变量
+### 环境变量
 
-下面这些环境变量是当前代码中已经支持的完整集合。
+以下环境变量是当前代码中支持的完整集合。
 
 | 变量 | 默认值 | 作用 | 何时需要修改 |
 | --- | --- | --- | --- |
@@ -597,7 +597,7 @@ HTTP 控制面主要面向运营界面、业务后端和排障工具。
 | `HITL_LOG_LEVEL` | `info` | 结构化日志级别：`debug`、`info`、`warn`、`error`。 | 需要排障时提高，生产环境需要降噪时调低。 |
 | `HITL_ENABLE_METRICS` | `true` | 是否在配置中启用 metrics。 | 除非你明确想减少可观测性开销，否则建议保持开启。 |
 
-## YAML 示例
+### YAML 示例
 
 ```yaml
 http:
@@ -623,22 +623,22 @@ observability:
   enableMetrics: true
 ```
 
-## 配置建议
+### 配置建议
 
-### 本地开发
+#### 本地开发
 
 - `HITL_STORAGE=memory`
 - 让客户端或测试工具显式发送 `x-agent-identity`
 - `HITL_WAIT_MODE` 保持 `terminal_only`
 
-### 共享开发环境或测试环境
+#### 共享开发环境或测试环境
 
 - `HITL_STORAGE=redis`
 - 配置真实可达的 `MCP_URL`
 - 使用独立的 `HITL_REDIS_PREFIX`
 - 确保上游调用方始终发送 `x-agent-identity`
 
-### 生产环境
+#### 生产环境
 
 - `HITL_STORAGE=redis`
 - 将 `MCP_URL` 设为外部真实可达 URL
@@ -648,7 +648,7 @@ observability:
 
 ---
 
-## 内部工作原理
+## 内部原理
 
 ### Scope 状态机
 
@@ -728,14 +728,14 @@ observability:
 
 这是整个应用最重要的边界层。
 
-### 4. Storage 层
+### 4. 存储层
 
 提供两种 repository 实现：
 
 - 面向本地开发和测试的 in-memory 实现
 - 面向真实部署的 Redis 实现
 
-### 5. Observability 层
+### 5. 可观测性层
 
 提供：
 
@@ -764,7 +764,7 @@ observability:
 
 ## 运维
 
-## 健康检查与就绪检查
+### 健康检查与就绪检查
 
 - 存活检查：`GET /api/v1/healthz`
 - 就绪检查：`GET /api/v1/readyz`
@@ -772,19 +772,19 @@ observability:
 
 在 Redis 支撑的生产环境里，真正控制流量放行时应使用 readiness，而不是 liveness。
 
-## 日志
+### 日志
 
 服务默认输出结构化请求日志与错误日志。
 
 排障时可以设置 `HITL_LOG_LEVEL=debug`，以观察更细的请求与仓储行为。
 
-## Metrics
+### Metrics
 
 当前 metrics 通过 `/api/v1/metrics` 以 JSON 快照形式暴露。
 
 实现层面已经覆盖诸如 wait 时长和 pending 数量等运行信号。
 
-## 常见部署检查项
+### 常见部署检查项
 
 上线前至少确认：
 
