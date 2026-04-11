@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createRuntime } from '../../src/server/create-server';
+import { createRuntime } from '../../src/server/create-server.js';
 
 describe('mcp tool registration', () => {
   it('registers question-only tools', async () => {

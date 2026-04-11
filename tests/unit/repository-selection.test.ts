@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createRuntime } from '../../src/server/create-server';
+import { createRuntime } from '../../src/server/create-server.js';
 
 describe('repository selection', () => {
   it('falls back to memory repository when redis is unavailable', async () => {

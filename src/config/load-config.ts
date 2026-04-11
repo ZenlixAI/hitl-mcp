@@ -2,8 +2,8 @@ import { existsSync, readFileSync } from 'node:fs';
 import { resolve as resolvePath } from 'node:path';
 import dotenv from 'dotenv';
 import YAML from 'js-yaml';
-import { defaultConfig } from './defaults';
-import { appConfigSchema, type AppConfig } from './types';
+import { defaultConfig } from './defaults.js';
+import { appConfigSchema, type AppConfig } from './types.js';
 
 type Sources = {
   env?: Record<string, string>;

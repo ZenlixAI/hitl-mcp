@@ -1,8 +1,8 @@
 import { Hono } from 'hono';
-import { fail, ok } from '../response';
-import type { HitlMetrics } from '../../observability/metrics';
-import type { Logger } from '../../observability/logger';
-import type { HitlService } from '../../core/hitl-service';
+import { fail, ok } from '../response.js';
+import type { HitlMetrics } from '../../observability/metrics.js';
+import type { Logger } from '../../observability/logger.js';
+import type { HitlService } from '../../core/hitl-service.js';
 
 function errorCode(error: unknown) {
   return error instanceof Error ? error.message : 'UNKNOWN_ERROR';

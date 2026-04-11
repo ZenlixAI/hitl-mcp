@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { validateAnswerSet } from '../../src/domain/validators';
+import { validateAnswerSet } from '../../src/domain/validators.js';
 
 describe('answer validator', () => {
   it('returns readable errors for invalid range', () => {

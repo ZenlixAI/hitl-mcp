@@ -1,4 +1,4 @@
-import type { AppConfig } from './types';
+import type { AppConfig } from './types.js';
 
 export const defaultConfig: AppConfig = {
   server: { name: 'hitl-mcp', version: '0.1.0', baseUrl: 'http://0.0.0.0:3000' },

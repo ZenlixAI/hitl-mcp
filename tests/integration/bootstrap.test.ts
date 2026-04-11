@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createHttpApp } from '../../src/server/create-server';
+import { createHttpApp } from '../../src/server/create-server.js';
 
 describe('bootstrap', () => {
   it('exposes health endpoint', async () => {

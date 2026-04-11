@@ -1,5 +1,5 @@
 import { afterEach, describe, it, expect, vi } from 'vitest';
-import { createHttpApp, createRuntime } from '../../src/server/create-server';
+import { createHttpApp, createRuntime } from '../../src/server/create-server.js';
 
 describe('http submit answers api', () => {
   it('returns 422 when target questions do not exist in caller scope', async () => {

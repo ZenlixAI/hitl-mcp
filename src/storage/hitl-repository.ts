@@ -1,4 +1,4 @@
-import type { CallerScope, ScopeQuestionSnapshot, ScopedQuestionGroup } from '../domain/types';
+import type { CallerScope, ScopeQuestionSnapshot, ScopedQuestionGroup } from '../domain/types.js';
 
 export interface FinalizeResult {
   status: 'answered' | 'in_progress';

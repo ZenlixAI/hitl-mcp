@@ -1,5 +1,5 @@
 import type { Context, MiddlewareHandler } from 'hono';
-import { fail } from '../response';
+import { fail } from '../response.js';
 
 export function requestContextMiddleware(params: { sessionHeader: string }): MiddlewareHandler {
   return async (c, next) => {

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { askQuestionGroupInputSchema, askQuestionsInputSchema } from '../../src/domain/schemas';
+import { askQuestionGroupInputSchema, askQuestionsInputSchema } from '../../src/domain/schemas.js';
 
 describe('domain schemas', () => {
   it('rejects single_choice without options', () => {

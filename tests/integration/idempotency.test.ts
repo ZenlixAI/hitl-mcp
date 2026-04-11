@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createRuntime } from '../../src/server/create-server';
+import { createRuntime } from '../../src/server/create-server.js';
 
 describe('idempotency', () => {
   it('returns same result for duplicated submit idempotency key', async () => {

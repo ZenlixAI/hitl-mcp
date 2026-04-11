@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createHttpApp } from '../../src/server/create-server';
+import { createHttpApp } from '../../src/server/create-server.js';
 
 describe('caller context middleware', () => {
   it('returns 401 when agent identity header is missing', async () => {

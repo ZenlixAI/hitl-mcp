@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { createRuntime } from '../../src/server/create-server';
+import { createRuntime } from '../../src/server/create-server.js';
 
 describe('GET /questions/pending', () => {
   it('returns pending questions for caller scope from headers', async () => {

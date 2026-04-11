@@ -1,6 +1,6 @@
 import { getRequestContext, type MiddlewareContext } from 'mcp-use/server';
-import { DomainError } from '../domain/errors';
-import type { CallerScope } from '../domain/types';
+import { DomainError } from '../domain/errors.js';
+import type { CallerScope } from '../domain/types.js';
 
 export function injectCallerScopeIntoMcpState(
   ctx: MiddlewareContext,

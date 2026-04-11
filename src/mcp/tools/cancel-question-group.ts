@@ -1,8 +1,8 @@
 import { object, error, type MCPServer } from 'mcp-use/server';
-import { cancelQuestionsInputSchema } from '../../domain/schemas';
-import type { HitlService } from '../../core/hitl-service';
-import type { Logger } from '../../observability/logger';
-import { readCallerScopeFromMcpContext } from '../caller-scope';
+import { cancelQuestionsInputSchema } from '../../domain/schemas.js';
+import type { HitlService } from '../../core/hitl-service.js';
+import type { Logger } from '../../observability/logger.js';
+import { readCallerScopeFromMcpContext } from '../caller-scope.js';
 
 export function registerCancelQuestionsTool(server: MCPServer, service: HitlService, logger: Logger) {
   server.tool(
