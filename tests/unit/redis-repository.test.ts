@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import Redis from 'ioredis-mock';
-import { RedisHitlRepository } from '../../src/storage/redis-hitl-repository';
+import { RedisHitlRepository } from '../../src/storage/redis-hitl-repository.js';
 
 describe('redis repository', () => {
   let redis: Redis;

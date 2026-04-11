@@ -1,8 +1,8 @@
 import { object, error, type MCPServer } from 'mcp-use/server';
 import { z } from 'zod';
-import type { HitlService } from '../../core/hitl-service';
-import type { Logger } from '../../observability/logger';
-import { readCallerScopeFromMcpContext } from '../caller-scope';
+import type { HitlService } from '../../core/hitl-service.js';
+import type { Logger } from '../../observability/logger.js';
+import { readCallerScopeFromMcpContext } from '../caller-scope.js';
 
 export function registerGetPendingQuestionsTool(server: MCPServer, service: HitlService, logger: Logger) {
   server.tool(

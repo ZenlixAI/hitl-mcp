@@ -2,7 +2,7 @@ import { mkdtemp, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { describe, it, expect } from 'vitest';
-import { loadConfig, resolveConfig } from '../../src/config/load-config';
+import { loadConfig, resolveConfig } from '../../src/config/load-config.js';
 
 describe('config loader file priority', () => {
   it('applies env > .env > yaml > defaults across mapped fields', async () => {

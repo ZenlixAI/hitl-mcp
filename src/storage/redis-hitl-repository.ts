@@ -1,14 +1,14 @@
 import { randomUUID } from 'node:crypto';
-import type Redis from 'ioredis';
-import type { CallerScope, ScopeQuestionSnapshot, ScopedQuestionGroup } from '../domain/types';
-import { validateAnswerSet } from '../domain/validators';
-import { transitionStatus } from '../state/status-machine';
-import { redisKeys } from './redis-keys';
-import type { CreatePendingGroupInput, FinalizeResult, HitlRepository } from './hitl-repository';
+import type { CallerScope, ScopeQuestionSnapshot, ScopedQuestionGroup } from '../domain/types.js';
+import { validateAnswerSet } from '../domain/validators.js';
+import { transitionStatus } from '../state/status-machine.js';
+import type { RedisClient } from './redis-client.js';
+import { redisKeys } from './redis-keys.js';
+import type { CreatePendingGroupInput, FinalizeResult, HitlRepository } from './hitl-repository.js';
 
 export class RedisHitlRepository implements HitlRepository {
   constructor(
-    private readonly redis: Redis,
+    private readonly redis: RedisClient,
     private readonly prefix: string,
     private readonly ttlSeconds: number
   ) {}
@@ -100,7 +100,7 @@ export class RedisHitlRepository implements HitlRepository {
     agentSessionId: string
   ): Promise<ScopedQuestionGroup[]> {
     const groupIds = await this.redis.smembers(redisKeys.pendingScope(this.prefix, agentIdentity, agentSessionId));
-    const groups = await Promise.all(groupIds.map((groupId) => this.getGroup(groupId)));
+    const groups = await Promise.all(groupIds.map((groupId: string) => this.getGroup(groupId)));
     return groups.filter(Boolean) as ScopedQuestionGroup[];
   }
 
@@ -138,7 +138,7 @@ export class RedisHitlRepository implements HitlRepository {
       redisKeys.scopeGroups(this.prefix, caller.agent_identity, caller.agent_session_id)
     );
     const groups = (
-      await Promise.all(groupIds.map((groupId) => this.getGroup(groupId)))
+      await Promise.all(groupIds.map((groupId: string) => this.getGroup(groupId)))
     ).filter(Boolean) as ScopedQuestionGroup[];
 
     const pendingQuestions: Array<Record<string, unknown>> = [];

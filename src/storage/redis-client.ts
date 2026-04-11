@@ -1,4 +1,6 @@
-import Redis from 'ioredis';
+import { Redis } from 'ioredis';
+
+export type RedisClient = InstanceType<typeof Redis>;
 
 export function createRedisClient(redisUrl: string) {
   const redis = new Redis(redisUrl, {

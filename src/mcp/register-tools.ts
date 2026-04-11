@@ -1,12 +1,12 @@
 import type { MCPServer } from 'mcp-use/server';
-import type { HitlService } from '../core/hitl-service';
-import type { Logger } from '../observability/logger';
-import { registerAskTool } from './tools/create-question-group';
-import { registerGetPendingQuestionsTool } from './tools/get-current-question-group';
-import { registerGetQuestionTool } from './tools/get-question';
-import { registerWaitTool } from './tools/wait-question-group';
-import { registerCancelQuestionsTool } from './tools/cancel-question-group';
-import { registerSubmitAnswersTool } from './tools/submit-answers';
+import type { HitlService } from '../core/hitl-service.js';
+import type { Logger } from '../observability/logger.js';
+import { registerAskTool } from './tools/create-question-group.js';
+import { registerGetPendingQuestionsTool } from './tools/get-current-question-group.js';
+import { registerGetQuestionTool } from './tools/get-question.js';
+import { registerWaitTool } from './tools/wait-question-group.js';
+import { registerCancelQuestionsTool } from './tools/cancel-question-group.js';
+import { registerSubmitAnswersTool } from './tools/submit-answers.js';
 
 export function registerHitlTools(server: MCPServer, service: HitlService, logger: Logger) {
   registerAskTool(server, service, logger);

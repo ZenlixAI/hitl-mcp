@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { createRuntime } from '../../src/server/create-server';
+import { createRuntime } from '../../src/server/create-server.js';
 
 describe('e2e pending to answered', () => {
   it('asks questions, waits, then resolves after staged submissions', async () => {

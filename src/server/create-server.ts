@@ -1,19 +1,19 @@
 import { MCPServer } from 'mcp-use/server';
-import { loadConfig } from '../config/load-config';
-import { HitlService } from '../core/hitl-service';
-import { requestContextMiddleware } from '../http/middleware/request-context';
-import { requestIdMiddleware } from '../http/middleware/request-id';
-import { questionRoutes } from '../http/routes/questions';
-import { fail, ok } from '../http/response';
-import { injectCallerScopeIntoMcpState } from '../mcp/caller-scope';
-import { registerHitlTools } from '../mcp/register-tools';
-import { Logger } from '../observability/logger';
-import { HitlMetrics } from '../observability/metrics';
-import type { HitlRepository } from '../storage/hitl-repository';
-import { InMemoryHitlRepository } from '../storage/in-memory-repository';
-import { createRedisClient } from '../storage/redis-client';
-import { RedisHitlRepository } from '../storage/redis-hitl-repository';
-import { Waiter } from '../state/waiter';
+import { loadConfig } from '../config/load-config.js';
+import { HitlService } from '../core/hitl-service.js';
+import { requestContextMiddleware } from '../http/middleware/request-context.js';
+import { requestIdMiddleware } from '../http/middleware/request-id.js';
+import { questionRoutes } from '../http/routes/questions.js';
+import { fail, ok } from '../http/response.js';
+import { injectCallerScopeIntoMcpState } from '../mcp/caller-scope.js';
+import { registerHitlTools } from '../mcp/register-tools.js';
+import { Logger } from '../observability/logger.js';
+import { HitlMetrics } from '../observability/metrics.js';
+import type { HitlRepository } from '../storage/hitl-repository.js';
+import { InMemoryHitlRepository } from '../storage/in-memory-repository.js';
+import { createRedisClient } from '../storage/redis-client.js';
+import { RedisHitlRepository } from '../storage/redis-hitl-repository.js';
+import { Waiter } from '../state/waiter.js';
 
 async function resolveRepository(params: {
   storageKind: 'memory' | 'redis';

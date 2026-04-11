@@ -1,8 +1,8 @@
-import { askQuestionsInputSchema, cancelQuestionsInputSchema, submitAnswersInputSchema, waitQuestionsInputSchema } from '../domain/schemas';
-import type { CallerScope, ScopeQuestionSnapshot } from '../domain/types';
-import type { HitlMetrics } from '../observability/metrics';
-import type { HitlRepository } from '../storage/hitl-repository';
-import type { Waiter } from '../state/waiter';
+import { askQuestionsInputSchema, cancelQuestionsInputSchema, submitAnswersInputSchema, waitQuestionsInputSchema } from '../domain/schemas.js';
+import type { CallerScope, ScopeQuestionSnapshot } from '../domain/types.js';
+import type { HitlMetrics } from '../observability/metrics.js';
+import type { HitlRepository } from '../storage/hitl-repository.js';
+import type { Waiter } from '../state/waiter.js';
 
 export class HitlService {
   constructor(

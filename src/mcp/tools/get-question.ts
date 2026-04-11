@@ -1,7 +1,7 @@
 import { object, error, type MCPServer } from 'mcp-use/server';
 import { z } from 'zod';
-import type { HitlService } from '../../core/hitl-service';
-import type { Logger } from '../../observability/logger';
+import type { HitlService } from '../../core/hitl-service.js';
+import type { Logger } from '../../observability/logger.js';
 
 const schema = z.object({
   question_id: z.string().min(1).describe('Question id')

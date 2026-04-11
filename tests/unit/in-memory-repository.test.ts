@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { InMemoryHitlRepository } from '../../src/storage/in-memory-repository';
+import { InMemoryHitlRepository } from '../../src/storage/in-memory-repository.js';
 
 describe('in-memory repository scoped create', () => {
   it('returns the same pending group for matching create idempotency key', async () => {

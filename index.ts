@@ -1,4 +1,4 @@
-import { createRuntime } from './src/server/create-server';
+import { createRuntime } from './src/server/create-server.js';
 
 async function main() {
   const runtime = await createRuntime();

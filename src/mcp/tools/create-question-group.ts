@@ -1,8 +1,8 @@
 import { object, error, type MCPServer } from 'mcp-use/server';
-import { askQuestionsInputSchema } from '../../domain/schemas';
-import type { HitlService } from '../../core/hitl-service';
-import type { Logger } from '../../observability/logger';
-import { readCallerScopeFromMcpContext } from '../caller-scope';
+import { askQuestionsInputSchema } from '../../domain/schemas.js';
+import type { HitlService } from '../../core/hitl-service.js';
+import type { Logger } from '../../observability/logger.js';
+import { readCallerScopeFromMcpContext } from '../caller-scope.js';
 
 export function registerAskTool(server: MCPServer, service: HitlService, logger: Logger) {
   server.tool(

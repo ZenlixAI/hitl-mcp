@@ -2,8 +2,8 @@ import { Hono } from 'hono';
 import type { MiddlewareContext } from 'mcp-use/server';
 import { runWithContext } from 'mcp-use/server';
 import { describe, expect, it } from 'vitest';
-import { DomainError } from '../../src/domain/errors';
-import { injectCallerScopeIntoMcpState, readCallerScopeFromMcpContext } from '../../src/mcp/caller-scope';
+import { DomainError } from '../../src/domain/errors.js';
+import { injectCallerScopeIntoMcpState, readCallerScopeFromMcpContext } from '../../src/mcp/caller-scope.js';
 
 describe('mcp caller scope bridge', () => {
   it('copies agent identity and session id from request context into mcp state', async () => {

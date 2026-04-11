@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { describe, expect, it } from 'vitest';
-import { requestContextMiddleware } from '../../src/http/middleware/request-context';
+import { requestContextMiddleware } from '../../src/http/middleware/request-context.js';
 
 describe('request context middleware', () => {
   it('extracts agent identity and session id from headers', async () => {

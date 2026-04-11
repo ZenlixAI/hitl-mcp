@@ -1,8 +1,8 @@
 import { randomUUID } from 'node:crypto';
-import type { CallerScope, ScopeQuestionSnapshot, ScopedQuestionGroup } from '../domain/types';
-import { validateAnswerSet } from '../domain/validators';
-import { transitionStatus } from '../state/status-machine';
-import type { CreatePendingGroupInput, FinalizeResult, HitlRepository } from './hitl-repository';
+import type { CallerScope, ScopeQuestionSnapshot, ScopedQuestionGroup } from '../domain/types.js';
+import { validateAnswerSet } from '../domain/validators.js';
+import { transitionStatus } from '../state/status-machine.js';
+import type { CreatePendingGroupInput, FinalizeResult, HitlRepository } from './hitl-repository.js';
 
 export class InMemoryHitlRepository implements HitlRepository {
   private groups = new Map<string, ScopedQuestionGroup>();

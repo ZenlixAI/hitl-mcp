@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { resolveConfig } from '../../src/config/load-config';
+import { resolveConfig } from '../../src/config/load-config.js';
 
 describe('config loader', () => {
   it('uses 0.0.0.0:3000 as default host and port', async () => {
