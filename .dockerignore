@@ -5,3 +5,4 @@ coverage
 .git
 .gitignore
 .tmp-hitl-mcp
+images/
