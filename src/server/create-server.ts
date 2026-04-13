@@ -71,6 +71,7 @@ export async function createRuntime() {
     title: 'HITL MCP',
     version: config.server.version,
     description: 'Human-in-the-loop MCP server with HTTP control plane.',
+    host: config.http.host,
     baseUrl: config.server.baseUrl,
     favicon: 'favicon.ico',
     icons: [
