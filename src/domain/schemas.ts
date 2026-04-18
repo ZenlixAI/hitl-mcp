@@ -146,6 +146,12 @@ export const askQuestionsInputSchema = z
   })
   .strict();
 
+export const askToolInputSchema = askQuestionsInputSchema
+  .extend({
+    wait_after_ask: z.boolean().optional().default(true)
+  })
+  .strict();
+
 export const waitQuestionsInputSchema = z.object({}).strict();
 
 export const submitAnswersInputSchema = z.object({

@@ -52,36 +52,16 @@ export class HitlService {
     };
   }
 
-  async askQuestions(params: {
+  private async waitWithBaseline(params: {
     caller: CallerScope;
-    input: unknown;
+    baselineQuestionIds: Set<string>;
   }) {
-    const parsed = askQuestionsInputSchema.parse(params.input);
-    const created = await this.repository.createPendingGroup({
-      agent_identity: params.caller.agent_identity,
-      agent_session_id: params.caller.agent_session_id,
-      ...parsed
-    });
-    return created.questions;
-  }
-
-  async getPendingQuestions(caller: CallerScope) {
-    return this.repository.getPendingQuestionsByScope(caller.agent_identity, caller.agent_session_id);
-  }
-
-  async wait(params: {
-    caller: CallerScope;
-  }) {
-    waitQuestionsInputSchema.parse({});
     const timeoutMs = this.maxWaitSeconds > 0 ? this.maxWaitSeconds * 1000 : 0;
     const start = Date.now();
     const snapshotAtWaitStart = await this.repository.getScopeSnapshot(params.caller);
-    const pendingQuestionIdsAtWaitStart = new Set(
-      snapshotAtWaitStart.pending_questions.map((question) => String(question.question_id))
-    );
     const initialSnapshot = this.filterWaitSnapshot(
       snapshotAtWaitStart,
-      pendingQuestionIdsAtWaitStart
+      params.baselineQuestionIds
     );
     this.metrics?.setPendingCount(this.waiter.size() + 1);
     try {
@@ -95,7 +75,7 @@ export class HitlService {
 
       while (true) {
         const result = (await this.waiter.wait(this.scopeKey(params.caller), timeoutMs)) as ScopeQuestionSnapshot;
-        const filteredResult = this.filterWaitSnapshot(result, pendingQuestionIdsAtWaitStart);
+        const filteredResult = this.filterWaitSnapshot(result, params.baselineQuestionIds);
         if (!filteredResult.is_complete && filteredResult.changed_question_ids.length === 0) {
           continue;
         }
@@ -120,6 +100,46 @@ export class HitlService {
       this.metrics?.observeWaitDuration(Date.now() - start);
       this.metrics?.setPendingCount(this.waiter.size());
     }
+  }
+
+  async askQuestions(params: {
+    caller: CallerScope;
+    input: unknown;
+  }) {
+    const parsed = askQuestionsInputSchema.parse(params.input);
+    const created = await this.repository.createPendingGroup({
+      agent_identity: params.caller.agent_identity,
+      agent_session_id: params.caller.agent_session_id,
+      ...parsed
+    });
+    return created.questions;
+  }
+
+  async getPendingQuestions(caller: CallerScope) {
+    return this.repository.getPendingQuestionsByScope(caller.agent_identity, caller.agent_session_id);
+  }
+
+  async wait(params: {
+    caller: CallerScope;
+  }) {
+    waitQuestionsInputSchema.parse({});
+    const snapshotAtWaitStart = await this.repository.getScopeSnapshot(params.caller);
+    return this.waitWithBaseline({
+      caller: params.caller,
+      baselineQuestionIds: new Set(
+        snapshotAtWaitStart.pending_questions.map((question) => String(question.question_id))
+      )
+    });
+  }
+
+  async waitForQuestionIds(params: {
+    caller: CallerScope;
+    questionIds: string[];
+  }) {
+    return this.waitWithBaseline({
+      caller: params.caller,
+      baselineQuestionIds: new Set(params.questionIds.map(String))
+    });
   }
 
   async submitAnswers(params: {
