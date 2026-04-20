@@ -135,31 +135,19 @@ describe('wait modes', () => {
     expect(secondEvent.status).toBe('completed');
     expect(secondEvent.is_terminal).toBe(true);
     expect(secondEvent.changed_question_ids).toEqual([secondQuestionId]);
-    expect(secondEvent.resolved_questions).toEqual(
-      expect.arrayContaining([
-        {
-          question: expect.objectContaining({
-            question_id: firstQuestionId,
-            title: 'First?',
-            type: 'boolean',
-            status: 'answered',
-            answer: { value: true }
-          }),
-          status: 'answered',
-          answer: { value: true }
-        },
-        {
-          question: expect.objectContaining({
-            question_id: secondQuestionId,
-            title: 'Second?',
-            type: 'boolean',
-            status: 'answered',
-            answer: { value: false }
-          }),
+    expect(secondEvent.answered_question_ids).toEqual([secondQuestionId]);
+    expect(secondEvent.resolved_questions).toEqual([
+      {
+        question: expect.objectContaining({
+          question_id: secondQuestionId,
+          title: 'Second?',
+          type: 'boolean',
           status: 'answered',
           answer: { value: false }
-        }
-      ])
-    );
+        }),
+        status: 'answered',
+        answer: { value: false }
+      }
+    ]);
   });
 });
