@@ -1,68 +1,66 @@
 import { object, error, type MCPServer } from 'mcp-use/server';
-import { askToolInputSchema } from '../../domain/schemas.js';
+import { askUserToolInputSchema } from '../../domain/schemas.js';
 import type { HitlService } from '../../core/hitl-service.js';
 import type { Logger } from '../../observability/logger.js';
 import { readCallerScopeFromMcpContext } from '../caller-scope.js';
 
-export function registerAskTool(server: MCPServer, service: HitlService, logger: Logger) {
+async function waitUntilTerminal(
+  waitFn: () => Promise<any>
+): Promise<any> {
+  while (true) {
+    try {
+      const result = await waitFn();
+      if (result?.is_terminal) {
+        return result;
+      }
+    } catch (error) {
+      if (error instanceof Error && error.message === 'wait timeout') {
+        continue;
+      }
+
+      throw error;
+    }
+  }
+}
+
+export function registerAskUserTool(server: MCPServer, service: HitlService, logger: Logger) {
   server.tool(
     {
-      name: 'hitl_ask',
-      description: 'Create one or more pending questions for the current caller scope.',
-      schema: askToolInputSchema
+      name: 'hitl_ask_user',
+      description: 'Ask the human user a structured question when the task cannot safely continue without a human choice, confirmation, approval, or missing business input.',
+      schema: askUserToolInputSchema
     },
     async (input, ctx) => {
       try {
-        const { wait_after_ask = true, ...askInput } = input;
         const caller = readCallerScopeFromMcpContext(ctx);
-        const questions = await service.askQuestions({
+        const isContinueWait = Object.keys(input).length === 0;
+
+        if (isContinueWait) {
+          const wait = await waitUntilTerminal(() =>
+            service.wait({
+              caller
+            })
+          );
+          return object({ wait });
+        }
+
+        const createdQuestions = await service.askQuestions({
           caller,
-          input: askInput
+          input
         });
-        if (!wait_after_ask) {
-          return object({ questions });
-        }
-
-        try {
-          const wait = await service.waitForQuestionIds({
+        const wait = await waitUntilTerminal(() =>
+          service.waitForQuestionIds({
             caller,
-            questionIds: questions.map((question) => String(question.question_id))
-          });
-          return object({ questions, wait });
-        } catch (waitErr) {
-          logger.warn('mcp_ask_wait_failed', {
-            tool_name: 'hitl_ask',
-            error: waitErr
-          });
-
-          if (waitErr instanceof Error && waitErr.message === 'wait timeout') {
-            const pendingQuestions = (await service.getPendingQuestions(caller)).filter((question) =>
-              questions.some((created) => String(created.question_id) === String(question.question_id))
-            );
-            return object({
-              questions,
-              wait: {
-                status: 'timeout',
-                is_terminal: false,
-                pending_questions: pendingQuestions,
-                resolved_questions: [],
-                answered_question_ids: [],
-                skipped_question_ids: [],
-                cancelled_question_ids: [],
-                changed_question_ids: [],
-                is_complete: false
-              }
-            });
-          }
-
-          throw waitErr;
-        }
+            questionIds: createdQuestions.map((question) => String(question.question_id))
+          })
+        );
+        return object({ questions: createdQuestions, wait });
       } catch (err) {
-        logger.warn('mcp_ask_failed', {
-          tool_name: 'hitl_ask',
+        logger.warn('mcp_ask_user_failed', {
+          tool_name: 'hitl_ask_user',
           error: err
         });
-        return error(err instanceof Error ? err.message : 'failed to ask questions');
+        return error(err instanceof Error ? err.message : 'failed to ask and wait');
       }
     }
   );

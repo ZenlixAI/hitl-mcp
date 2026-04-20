@@ -154,6 +154,33 @@ export const askToolInputSchema = askQuestionsInputSchema
 
 export const waitQuestionsInputSchema = z.object({}).strict();
 
+export const askUserToolInputSchema = z
+  .object({
+    title: z.string().min(1).optional(),
+    description: z.string().optional(),
+    tags: z.array(z.string()).optional(),
+    extra: z.record(z.string(), z.any()).optional(),
+    ttl_seconds: z.number().int().positive().optional(),
+    questions: z.array(askQuestionSchema).min(1).optional(),
+    idempotency_key: z.string().optional()
+  })
+  .strict()
+  .superRefine((input, ctx) => {
+    const keys = Object.keys(input);
+    if (keys.length === 0) {
+      return;
+    }
+
+    const parsed = askQuestionsInputSchema.safeParse(input);
+    if (parsed.success) {
+      return;
+    }
+
+    for (const issue of parsed.error.issues) {
+      ctx.addIssue(issue as any);
+    }
+  });
+
 export const submitAnswersInputSchema = z.object({
   idempotency_key: z.string().optional(),
   answers: z.record(z.string(), z.object({ value: z.any() })).optional(),

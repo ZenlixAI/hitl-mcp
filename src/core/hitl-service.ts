@@ -8,7 +8,6 @@ export class HitlService {
   constructor(
     private readonly repository: HitlRepository,
     private readonly waiter: Waiter,
-    private readonly maxWaitSeconds: number,
     private readonly waitMode: 'terminal_only' | 'progressive',
     private readonly metrics?: HitlMetrics
   ) {}
@@ -56,7 +55,6 @@ export class HitlService {
     caller: CallerScope;
     baselineQuestionIds: Set<string>;
   }) {
-    const timeoutMs = this.maxWaitSeconds > 0 ? this.maxWaitSeconds * 1000 : 0;
     const start = Date.now();
     const snapshotAtWaitStart = await this.repository.getScopeSnapshot(params.caller);
     const initialSnapshot = this.filterWaitSnapshot(
@@ -74,7 +72,7 @@ export class HitlService {
       }
 
       while (true) {
-        const result = (await this.waiter.wait(this.scopeKey(params.caller), timeoutMs)) as ScopeQuestionSnapshot;
+        const result = (await this.waiter.wait(this.scopeKey(params.caller), 0)) as ScopeQuestionSnapshot;
         const filteredResult = this.filterWaitSnapshot(result, params.baselineQuestionIds);
         if (!filteredResult.is_complete && filteredResult.changed_question_ids.length === 0) {
           continue;

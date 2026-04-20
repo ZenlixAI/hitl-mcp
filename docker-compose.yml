@@ -24,7 +24,6 @@ services:
       HITL_REDIS_URL: redis://redis:6379
       HITL_REDIS_PREFIX: hitl
       HITL_TTL_SECONDS: 604800
-      HITL_PENDING_MAX_WAIT_SECONDS: 0
       HITL_ENABLE_METRICS: 'true'
     ports:
       - '3000:3000'

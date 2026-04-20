@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { askQuestionGroupInputSchema, askQuestionsInputSchema } from '../../src/domain/schemas.js';
+import {
+  askUserToolInputSchema,
+  askQuestionGroupInputSchema,
+  askQuestionsInputSchema
+} from '../../src/domain/schemas.js';
 
 describe('domain schemas', () => {
   it('rejects single_choice without options', () => {
@@ -38,5 +42,28 @@ describe('domain schemas', () => {
     });
 
     expect(parsed.success).toBe(true);
+  });
+
+  it('accepts empty ask-and-wait input for continue-wait', () => {
+    const parsed = askUserToolInputSchema.safeParse({});
+
+    expect(parsed.success).toBe(true);
+  });
+
+  it('accepts full ask-and-wait ask input', () => {
+    const parsed = askUserToolInputSchema.safeParse({
+      title: 'group',
+      questions: [{ type: 'boolean', title: 'approve?' }]
+    });
+
+    expect(parsed.success).toBe(true);
+  });
+
+  it('rejects partial ask-and-wait ask input', () => {
+    const parsed = askUserToolInputSchema.safeParse({
+      title: 'group'
+    });
+
+    expect(parsed.success).toBe(false);
   });
 });
