@@ -26,8 +26,6 @@ Do not send `questions` as a string.
 
 Do not omit the top-level `title`.
 
-Prefer asking 1 question unless you truly need multiple questions.
-
 Preferred question type order:
 
 1. `boolean`
@@ -90,6 +88,28 @@ Do not send options with only `label`.
     {
       "type": "text",
       "title": "What is the required cooling wait time?"
+    }
+  ]
+}
+```
+
+### Multiple Questions
+
+```json
+{
+  "title": "Deployment Prerequisites",
+  "questions": [
+    {
+      "type": "single_choice",
+      "title": "Choose the target environment",
+      "options": [
+        { "label": "staging", "value": "staging" },
+        { "label": "production", "value": "production" }
+      ]
+    },
+    {
+      "type": "text",
+      "title": "Enter the approval ticket number"
     }
   ]
 }
