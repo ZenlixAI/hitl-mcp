@@ -62,7 +62,6 @@ export async function createRuntime() {
   const service = new HitlService(
     repository,
     waiter,
-    config.pending.maxWaitSeconds,
     config.pending.waitMode,
     metrics
   );

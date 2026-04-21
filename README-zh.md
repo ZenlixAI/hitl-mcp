@@ -256,7 +256,7 @@ curl -X POST "http://localhost:3000/api/v1/questions" \
 ### 流程 1：标准 ask -> wait -> answer -> complete
 
 1. Agent 在自己的 caller scope 下创建一个或多个问题。
-2. Agent 立即调用 `hitl_wait`。
+2. Agent 调用 `hitl_ask_user`，它会执行第一次等待。
 3. UI 或后端读取这个 scope 下的 pending questions。
 4. 人类回答其中一个或多个问题。
 5. Agent 对该 scope 执行 wait。
@@ -273,7 +273,7 @@ curl -X POST "http://localhost:3000/api/v1/questions" \
 ### 流程 3：progressive wait
 
 1. 设置 `HITL_WAIT_MODE=progressive`
-2. Agent 调用 `hitl_wait`
+2. Agent 调用 `hitl_ask_user`
 3. 任何 answer、skip 或 cancel 都会唤醒等待中的调用
 4. wait 结果会带回本次变化的 `question_id`
 5. Agent 决定是继续 wait，还是先处理这次中间结果
@@ -294,15 +294,17 @@ wait 始终是 **scope 级操作**，这是有意为之：
 
 执行规则：
 
-- 每次 `hitl_ask` 之后，下一次 HITL tool 调用必须是 `hitl_wait`
-- 不要把 `hitl_ask` 当成流程结束
+- 使用 `hitl_ask_user` 来创建问题并执行第一次等待
+- 不要把 `hitl_ask_user` 当成流程结束
 - 不要用 `hitl_get_pending_questions` 代替 ask 之后第一次 wait
 
 ---
 
 ## MCP 工具
 
-`hitl-mcp` 当前暴露以下 MCP 工具：
+`hitl-mcp` 当前只暴露下面两个面向 Agent 的 MCP 工具。
+
+列出待处理问题、提交答案、取消问题、查询单题等人类/UI/backend 侧操作，应通过 HTTP API 完成，而不是通过 MCP tool 完成。
 
 ### `hitl_ask`
 
@@ -329,6 +331,9 @@ wait 始终是 **scope 级操作**，这是有意为之：
 - 调用方不能传 `question_id`
 - `question_id` 由服务端生成
 - 一次请求可以创建多个问题
+- 默认情况下，`hitl_ask` 会自动执行第一次等待
+- 如果需要保留旧的“只创建不等待”行为，可传 `"wait_after_ask": false`
+- `hitl_ask_user` 会在内部持续等待人类响应，在 wait 到达终态前不会把控制权返回给 Agent
 
 ### `hitl_wait`
 
@@ -347,58 +352,6 @@ wait 始终是 **scope 级操作**，这是有意为之：
 - `is_complete`
 
 `resolved_questions` 会返回已经完成的问题完整对象，以及对应的最终状态和可用时的答案。
-
-### `hitl_get_pending_questions`
-
-返回当前 caller scope 下全部 pending questions。
-
-### `hitl_submit_answers`
-
-提交新答案，以及可选的 skipped questions。
-
-输入示例：
-
-```json
-{
-  "answers": {
-    "q_01JXYZ...": { "value": true }
-  },
-  "skipped_question_ids": ["q_01JABC..."],
-  "idempotency_key": "idem-1"
-}
-```
-
-注意：
-
-- `answers` 可以只覆盖部分 pending questions
-- 可选问题可以显式 skip
-- 必答题不能 skip
-- 多次提交会在服务端累积保存
-
-### `hitl_cancel_questions`
-
-取消指定 pending questions，或取消整个 scope 下所有 pending questions。
-
-输入示例：
-
-```json
-{
-  "question_ids": ["q_01JXYZ..."],
-  "reason": "no longer needed"
-}
-```
-
-或者：
-
-```json
-{
-  "cancel_all": true
-}
-```
-
-### `hitl_get_question`
-
-根据 `question_id` 获取单个问题。
 
 ---
 
@@ -590,7 +543,6 @@ HTTP 控制面主要面向运营界面、业务后端和排障工具。
 | `HITL_REDIS_PREFIX` | `hitl` | Redis key 前缀。 | 多个环境共用一个 Redis 时应区分前缀。 |
 | `HITL_TTL_SECONDS` | `604800` | 新创建问题集的默认 TTL。 | 当待人工处理的保留期限需要和业务 SLA 对齐时。 |
 | `HITL_ANSWERED_RETENTION_SECONDS` | `2592000` | 已回答状态的保留时长。 | 当审计需求或存储压力要求不同保留策略时。 |
-| `HITL_PENDING_MAX_WAIT_SECONDS` | `0` | 单次 wait 的最大时长。`0` 表示不限制。 | 当你需要控制 worker 占用时长或请求生命周期上限时。 |
 | `HITL_WAIT_MODE` | `terminal_only` | scope wait 行为：`terminal_only` 或 `progressive`。 | 当调用方需要感知每一次中间变化时设置为 `progressive`。 |
 | `HITL_AGENT_SESSION_HEADER` | `x-agent-session-id` | 读取 `agent_session_id` 的 header 名称。 | 当你接入现有网关或客户端，需要复用其他 session header 时。 |
 | `HITL_CREATE_CONFLICT_POLICY` | `error` | 配置面中的创建冲突策略。 | 建议保持默认。当前代码会加载并校验，但 handler 尚未实际使用。 |
@@ -613,7 +565,6 @@ ttl:
   defaultSeconds: 604800
   answeredRetentionSeconds: 2592000
 pending:
-  maxWaitSeconds: 0
   waitMode: terminal_only
 agentIdentity:
   sessionHeader: x-agent-session-id

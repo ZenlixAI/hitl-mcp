@@ -87,9 +87,8 @@ function mapEnv(env: Record<string, string>): Partial<AppConfig> {
     } as AppConfig['ttl'];
   }
 
-  if (env.HITL_PENDING_MAX_WAIT_SECONDS || env.HITL_WAIT_MODE) {
+  if (env.HITL_WAIT_MODE) {
     mapped.pending = {
-      ...(env.HITL_PENDING_MAX_WAIT_SECONDS ? { maxWaitSeconds: Number(env.HITL_PENDING_MAX_WAIT_SECONDS) } : {}),
       ...(env.HITL_WAIT_MODE ? { waitMode: env.HITL_WAIT_MODE as AppConfig['pending']['waitMode'] } : {})
     } as AppConfig['pending'];
   }

@@ -8,13 +8,96 @@ export class HitlService {
   constructor(
     private readonly repository: HitlRepository,
     private readonly waiter: Waiter,
-    private readonly maxWaitSeconds: number,
     private readonly waitMode: 'terminal_only' | 'progressive',
     private readonly metrics?: HitlMetrics
   ) {}
 
   private scopeKey(caller: CallerScope) {
     return `${caller.agent_identity}::${caller.agent_session_id}`;
+  }
+
+  private filterWaitSnapshot(
+    snapshot: ScopeQuestionSnapshot,
+    pendingQuestionIdsAtWaitStart: Set<string>
+  ): ScopeQuestionSnapshot {
+    const includes = (questionId: unknown) => pendingQuestionIdsAtWaitStart.has(String(questionId));
+    const pendingQuestions = snapshot.pending_questions.filter((question) =>
+      includes(question.question_id)
+    );
+    const resolvedQuestions = snapshot.resolved_questions.filter((entry) =>
+      includes(entry.question.question_id)
+    );
+    const answeredQuestionIds = snapshot.answered_question_ids.filter((questionId) =>
+      includes(questionId)
+    );
+    const skippedQuestionIds = snapshot.skipped_question_ids.filter((questionId) =>
+      includes(questionId)
+    );
+    const cancelledQuestionIds = snapshot.cancelled_question_ids.filter((questionId) =>
+      includes(questionId)
+    );
+    const changedQuestionIds = snapshot.changed_question_ids.filter((questionId) =>
+      includes(questionId)
+    );
+
+    return {
+      pending_questions: pendingQuestions,
+      resolved_questions: resolvedQuestions,
+      answered_question_ids: answeredQuestionIds,
+      skipped_question_ids: skippedQuestionIds,
+      cancelled_question_ids: cancelledQuestionIds,
+      changed_question_ids: changedQuestionIds,
+      is_complete: pendingQuestions.length === 0
+    };
+  }
+
+  private async waitWithBaseline(params: {
+    caller: CallerScope;
+    baselineQuestionIds: Set<string>;
+  }) {
+    const start = Date.now();
+    const snapshotAtWaitStart = await this.repository.getScopeSnapshot(params.caller);
+    const initialSnapshot = this.filterWaitSnapshot(
+      snapshotAtWaitStart,
+      params.baselineQuestionIds
+    );
+    this.metrics?.setPendingCount(this.waiter.size() + 1);
+    try {
+      if (initialSnapshot.is_complete) {
+        return {
+          status: 'completed',
+          is_terminal: true,
+          ...initialSnapshot
+        };
+      }
+
+      while (true) {
+        const result = (await this.waiter.wait(this.scopeKey(params.caller), 0)) as ScopeQuestionSnapshot;
+        const filteredResult = this.filterWaitSnapshot(result, params.baselineQuestionIds);
+        if (!filteredResult.is_complete && filteredResult.changed_question_ids.length === 0) {
+          continue;
+        }
+
+        if (this.waitMode === 'progressive') {
+          return {
+            status: filteredResult.is_complete ? 'completed' : 'in_progress',
+            is_terminal: filteredResult.is_complete,
+            ...filteredResult
+          };
+        }
+
+        if (filteredResult.is_complete) {
+          return {
+            status: 'completed',
+            is_terminal: true,
+            ...filteredResult
+          };
+        }
+      }
+    } finally {
+      this.metrics?.observeWaitDuration(Date.now() - start);
+      this.metrics?.setPendingCount(this.waiter.size());
+    }
   }
 
   async askQuestions(params: {
@@ -38,41 +121,23 @@ export class HitlService {
     caller: CallerScope;
   }) {
     waitQuestionsInputSchema.parse({});
-    const timeoutMs = this.maxWaitSeconds > 0 ? this.maxWaitSeconds * 1000 : 0;
-    const start = Date.now();
-    this.metrics?.setPendingCount(this.waiter.size() + 1);
-    try {
-      while (true) {
-        const snapshot = await this.repository.getScopeSnapshot(params.caller);
-        if (snapshot.is_complete) {
-          return {
-            status: 'completed',
-            is_terminal: true,
-            ...snapshot
-          };
-        }
+    const snapshotAtWaitStart = await this.repository.getScopeSnapshot(params.caller);
+    return this.waitWithBaseline({
+      caller: params.caller,
+      baselineQuestionIds: new Set(
+        snapshotAtWaitStart.pending_questions.map((question) => String(question.question_id))
+      )
+    });
+  }
 
-        const result = (await this.waiter.wait(this.scopeKey(params.caller), timeoutMs)) as ScopeQuestionSnapshot;
-        if (this.waitMode === 'progressive') {
-          return {
-            status: result.is_complete ? 'completed' : 'in_progress',
-            is_terminal: result.is_complete,
-            ...result
-          };
-        }
-
-        if (result.is_complete) {
-          return {
-            status: 'completed',
-            is_terminal: true,
-            ...result
-          };
-        }
-      }
-    } finally {
-      this.metrics?.observeWaitDuration(Date.now() - start);
-      this.metrics?.setPendingCount(this.waiter.size());
-    }
+  async waitForQuestionIds(params: {
+    caller: CallerScope;
+    questionIds: string[];
+  }) {
+    return this.waitWithBaseline({
+      caller: params.caller,
+      baselineQuestionIds: new Set(params.questionIds.map(String))
+    });
   }
 
   async submitAnswers(params: {

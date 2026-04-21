@@ -18,9 +18,7 @@ describe('config loader file priority', () => {
         '  host: 1.1.1.1',
         '  port: 1111',
         'redis:',
-        '  url: redis://yaml:6379',
-        'pending:',
-        '  maxWaitSeconds: 111'
+        '  url: redis://yaml:6379'
       ].join('\n'),
       'utf8'
     );
@@ -29,8 +27,7 @@ describe('config loader file priority', () => {
       dotenvPath,
       [
         'HITL_HTTP_PORT=2222',
-        'HITL_REDIS_URL=redis://dotenv:6379',
-        'HITL_PENDING_MAX_WAIT_SECONDS=222'
+        'HITL_REDIS_URL=redis://dotenv:6379'
       ].join('\n'),
       'utf8'
     );
@@ -40,15 +37,14 @@ describe('config loader file priority', () => {
       dotenvPath,
       env: {
         HITL_HTTP_PORT: '3333',
-        HITL_REDIS_URL: 'redis://env:6379',
-        HITL_PENDING_MAX_WAIT_SECONDS: '333'
+        HITL_REDIS_URL: 'redis://env:6379'
       }
     });
 
     expect(config.http.host).toBe('1.1.1.1');
     expect(config.http.port).toBe(3333);
     expect(config.redis.url).toBe('redis://env:6379');
-    expect(config.pending.maxWaitSeconds).toBe(333);
+    expect(config.pending.waitMode).toBe('terminal_only');
   });
 
   it('loads agent identity session header and conflict policy from env', async () => {

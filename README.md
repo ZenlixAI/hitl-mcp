@@ -256,7 +256,7 @@ This section describes the intended runtime flow, regardless of whether the call
 ### Sequence 1: standard ask -> wait -> answer -> complete
 
 1. The Agent creates one or more questions in its caller scope.
-2. The Agent immediately calls `hitl_wait`.
+2. The Agent calls `hitl_ask_user`, which performs the initial wait.
 3. A UI or backend fetches pending questions for the same caller scope.
 4. A human answers one or more pending questions.
 5. The Agent waits on the scope.
@@ -273,7 +273,7 @@ This section describes the intended runtime flow, regardless of whether the call
 ### Sequence 3: progressive wait
 
 1. `HITL_WAIT_MODE=progressive`
-2. The Agent calls `hitl_wait`.
+2. The Agent calls `hitl_ask_user`.
 3. Any answer, skip, or cancellation in the scope wakes the waiter.
 4. The wait result reports which `question_id`s changed.
 5. The Agent decides whether to continue waiting or act on the intermediate update.
@@ -296,19 +296,21 @@ This is deliberate:
 
 Operational rule:
 
-- after every `hitl_ask`, the next HITL tool call must be `hitl_wait`
-- do not treat `hitl_ask` as completion
+- use `hitl_ask_user` to create questions and perform the initial wait
+- do not treat `hitl_ask_user` as completion
 - do not substitute `hitl_get_pending_questions` for the first post-ask wait
 
 ---
 
 ## MCP tools
 
-`hitl-mcp` exposes the following MCP tools:
+`hitl-mcp` exposes only the single agent-facing MCP tool below.
 
-### `hitl_ask`
+Human/UI/backend-side operations such as listing pending questions, submitting answers, cancelling questions, and fetching one question should use the HTTP API instead of MCP tools.
 
-Creates one or more questions for the current caller scope.
+### `hitl_ask_user`
+
+Creates one or more questions for the current caller scope and performs the initial wait.
 
 Input shape:
 
@@ -331,76 +333,11 @@ Notes:
 - `question_id` must not be provided by the caller
 - the server generates `question_id`
 - one request can create multiple questions
-
-### `hitl_wait`
-
-Waits on the current caller scope.
-
-Typical response fields:
-
-- `status`
-- `is_terminal`
-- `changed_question_ids`
-- `pending_questions`
-- `resolved_questions`
-- `answered_question_ids`
-- `skipped_question_ids`
-- `cancelled_question_ids`
-- `is_complete`
-
-`resolved_questions` contains the full resolved question objects plus their final status and any stored answer.
-
-### `hitl_get_pending_questions`
-
-Returns all pending questions in the current caller scope.
-
-### `hitl_submit_answers`
-
-Submits new answers and optional skips.
-
-Input shape:
-
-```json
-{
-  "answers": {
-    "q_01JXYZ...": { "value": true }
-  },
-  "skipped_question_ids": ["q_01JABC..."],
-  "idempotency_key": "idem-1"
-}
-```
-
-Notes:
-
-- `answers` may contain any subset of pending questions
-- optional questions may be skipped explicitly
-- required questions cannot be skipped
-- submissions accumulate server-side
-
-### `hitl_cancel_questions`
-
-Cancels selected pending questions or all pending questions in the scope.
-
-Input shape:
-
-```json
-{
-  "question_ids": ["q_01JXYZ..."],
-  "reason": "no longer needed"
-}
-```
-
-Or:
-
-```json
-{
-  "cancel_all": true
-}
-```
-
-### `hitl_get_question`
-
-Fetches one question by `question_id`.
+- with question input, `hitl_ask_user` creates the question(s) and performs the initial wait
+- call the same tool again with `{}` to continue waiting on the current caller scope
+- `terminal_only`: return only when no pending questions remain
+- `progressive`: return after each state change
+- `hitl_ask_user` waits internally for the human response and does not return control to the Agent until the wait reaches a terminal state
 
 ---
 
@@ -592,7 +529,6 @@ The following environment variables are currently supported by the codebase.
 | `HITL_REDIS_PREFIX` | `hitl` | Redis key prefix. | Change when multiple environments share one Redis instance. |
 | `HITL_TTL_SECONDS` | `604800` | Default TTL for newly created question sets. | Change to align pending-question retention with your business SLA. |
 | `HITL_ANSWERED_RETENTION_SECONDS` | `2592000` | Retention window for answered state. | Change when auditability or storage pressure requires a different retention period. |
-| `HITL_PENDING_MAX_WAIT_SECONDS` | `0` | Maximum duration for one wait call. `0` means no timeout limit. | Change when you need bounded waits for worker scheduling or request lifecycle control. |
 | `HITL_WAIT_MODE` | `terminal_only` | Scope wait behavior: `terminal_only` or `progressive`. | Set to `progressive` when callers must react to each intermediate update. |
 | `HITL_AGENT_SESSION_HEADER` | `x-agent-session-id` | Header name used to read `agent_session_id`. | Change when integrating with an existing gateway or client that uses another session header. |
 | `HITL_CREATE_CONFLICT_POLICY` | `error` | Create conflict policy in config surface. | Keep at default. The current code validates and loads it, but it is not currently applied by request handlers. |
@@ -615,7 +551,6 @@ ttl:
   defaultSeconds: 604800
   answeredRetentionSeconds: 2592000
 pending:
-  maxWaitSeconds: 0
   waitMode: terminal_only
 agentIdentity:
   sessionHeader: x-agent-session-id

@@ -9,7 +9,7 @@ ttl:
   defaultSeconds: 604800
   answeredRetentionSeconds: 2592000
 pending:
-  maxWaitSeconds: 0
+  waitMode: terminal_only
 agentIdentity:
   sessionHeader: x-agent-session-id
   createConflictPolicy: error
