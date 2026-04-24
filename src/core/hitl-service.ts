@@ -40,6 +40,8 @@ export class HitlService {
     waitQuestionsInputSchema.parse({});
     const timeoutMs = this.maxWaitSeconds > 0 ? this.maxWaitSeconds * 1000 : 0;
     const start = Date.now();
+    const scopeKey = this.scopeKey(params.caller);
+    let observedVersion = this.waiter.currentVersion(scopeKey);
     this.metrics?.setPendingCount(this.waiter.size() + 1);
     try {
       while (true) {
@@ -52,7 +54,9 @@ export class HitlService {
           };
         }
 
-        const result = (await this.waiter.wait(this.scopeKey(params.caller), timeoutMs)) as ScopeQuestionSnapshot;
+        const event = await this.waiter.wait(scopeKey, observedVersion, timeoutMs);
+        observedVersion = event.version;
+        const result = event.payload as ScopeQuestionSnapshot;
         if (this.waitMode === 'progressive') {
           return {
             status: result.is_complete ? 'completed' : 'in_progress',
