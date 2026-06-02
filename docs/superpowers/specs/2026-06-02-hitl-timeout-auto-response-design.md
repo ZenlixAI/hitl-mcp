@@ -123,8 +123,11 @@ Changes:
 
 - Add `pending.defaultTimeoutSeconds`
 - Default value: `900`
+- Add `pending.timeoutPollIntervalSeconds`
+- Default value: `5`
 - Add env override:
   - `HITL_PENDING_DEFAULT_TIMEOUT_SECONDS`
+  - `HITL_PENDING_TIMEOUT_POLL_INTERVAL_SECONDS`
 
 The existing `maxWaitSeconds` config remains unchanged. This new timeout config applies to question auto-response, not to the `hitl_wait` call timeout.
 
@@ -207,8 +210,9 @@ Responsibilities:
 
 Suggested config:
 
-- internal polling interval constant or config-backed value
-- start conservative, e.g. 1000 ms
+- config-backed polling interval
+- default: 5 seconds
+- small trigger delay relative to the exact timeout deadline is acceptable by design
 
 The worker should be attached at runtime startup and share the same Redis connection strategy or a dedicated safe connection, depending on current client abstraction limits.
 
@@ -231,6 +235,9 @@ Redis implementation must guarantee idempotent processing:
 
 - if multiple app instances poll at the same time, only one finalizes a given group
 - if a group was already manually answered, timeout processing becomes a no-op
+- lock acquisition and finalize steps must be safe under multi-instance races
+- a worker that loses the lock must treat that group as unavailable and move on without error
+- stale locks must expire automatically so a crashed worker cannot block timeout processing indefinitely
 
 In-memory implementation:
 
@@ -300,24 +307,28 @@ Because tool descriptions are static strings today, runtime config and descripti
 ### Timeout auto-response flow
 
 1. Worker finds due pending group ids
-2. Worker locks one group
-3. Repository reloads current group
-4. For each pending question:
+2. Worker attempts to acquire a short-lived distributed lock for one group
+3. If lock acquisition fails, worker skips the group and continues
+4. Repository reloads current group
+5. For each pending question:
    - set `answer = default_answer`
    - set `status = answered`
    - set `is_timeout_auto_response = true`
    - set `auto_response_at = now`
-5. Recompute group status
-6. Update question and group records
-7. Remove deadline entry
-8. Build scope snapshot
-9. Publish snapshot event for waiter wake-up
+6. Recompute group status
+7. Update question and group records
+8. Remove deadline entry
+9. Build scope snapshot
+10. Publish snapshot event for waiter wake-up
+11. Release lock or let the lock TTL expire safely after completion
 
 ## Error Handling
 
 - Invalid explicit `default_answer` fails create with existing validation failure behavior.
 - Timeout worker must ignore groups that are already terminal.
 - Timeout worker must treat missing groups as stale schedule entries and clean them up.
+- Timeout worker lock acquisition must use Redis atomic primitives such as `SET NX EX` or an equivalent Lua-backed claim pattern.
+- After acquiring a lock, the worker must re-read current group state before writing so it cannot overwrite a just-completed human response.
 - Pub/sub notification failure should be logged; timeout persistence must not roll back after data is committed.
 - Redis unavailable at startup should preserve existing fallback-to-memory behavior, which implicitly disables timeout automation.
 
@@ -350,6 +361,7 @@ Existing clients that ignore unknown fields continue to work unchanged.
 - manual answer before deadline prevents timeout overwrite
 - completed/cancelled groups are removed from timeout zset
 - duplicate workers do not double-process the same group
+- lock expiry allows recovery if one worker crashes mid-processing
 
 ### Integration tests
 
@@ -357,6 +369,7 @@ Existing clients that ignore unknown fields continue to work unchanged.
 - timeout metadata is visible through HTTP and MCP outputs
 - memory-backed runtime never auto-responds on timeout
 - MCP tool registration includes updated guidance text
+- simulated multi-instance polling shows only one instance commits the timeout response
 
 ## Open Implementation Decisions
 
