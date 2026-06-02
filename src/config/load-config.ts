@@ -87,10 +87,21 @@ function mapEnv(env: Record<string, string>): Partial<AppConfig> {
     } as AppConfig['ttl'];
   }
 
-  if (env.HITL_PENDING_MAX_WAIT_SECONDS || env.HITL_WAIT_MODE) {
+  if (
+    env.HITL_PENDING_MAX_WAIT_SECONDS ||
+    env.HITL_WAIT_MODE ||
+    env.HITL_PENDING_DEFAULT_TIMEOUT_SECONDS ||
+    env.HITL_PENDING_TIMEOUT_POLL_INTERVAL_SECONDS
+  ) {
     mapped.pending = {
       ...(env.HITL_PENDING_MAX_WAIT_SECONDS ? { maxWaitSeconds: Number(env.HITL_PENDING_MAX_WAIT_SECONDS) } : {}),
-      ...(env.HITL_WAIT_MODE ? { waitMode: env.HITL_WAIT_MODE as AppConfig['pending']['waitMode'] } : {})
+      ...(env.HITL_WAIT_MODE ? { waitMode: env.HITL_WAIT_MODE as AppConfig['pending']['waitMode'] } : {}),
+      ...(env.HITL_PENDING_DEFAULT_TIMEOUT_SECONDS
+        ? { defaultTimeoutSeconds: Number(env.HITL_PENDING_DEFAULT_TIMEOUT_SECONDS) }
+        : {}),
+      ...(env.HITL_PENDING_TIMEOUT_POLL_INTERVAL_SECONDS
+        ? { timeoutPollIntervalSeconds: Number(env.HITL_PENDING_TIMEOUT_POLL_INTERVAL_SECONDS) }
+        : {})
     } as AppConfig['pending'];
   }
 

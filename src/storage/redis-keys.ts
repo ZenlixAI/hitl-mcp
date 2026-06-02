@@ -11,5 +11,8 @@ export const redisKeys = {
   scopeGroups: (prefix: string, agentIdentity: string, agentSessionId: string) =>
     `${prefix}:idx:groups:${agentIdentity}:${agentSessionId}`,
   createIdem: (prefix: string, agentIdentity: string, agentSessionId: string, idempotencyKey: string) =>
-    `${prefix}:idx:create-idem:${agentIdentity}:${agentSessionId}:${idempotencyKey}`
+    `${prefix}:idx:create-idem:${agentIdentity}:${agentSessionId}:${idempotencyKey}`,
+  timeoutDue: (prefix: string) => `${prefix}:timeout:due`,
+  timeoutLock: (prefix: string, groupId: string) => `${prefix}:timeout:lock:${groupId}`,
+  timeoutEvents: (prefix: string) => `${prefix}:timeout:events`
 };

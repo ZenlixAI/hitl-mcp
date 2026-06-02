@@ -29,4 +29,23 @@ describe('config loader', () => {
 
     expect(config.pending.waitMode).toBe('progressive');
   });
+
+  it('uses 15 minutes and 5 seconds as timeout defaults', async () => {
+    const config = await resolveConfig({ env: {} });
+
+    expect(config.pending.defaultTimeoutSeconds).toBe(900);
+    expect(config.pending.timeoutPollIntervalSeconds).toBe(5);
+  });
+
+  it('loads timeout config from env', async () => {
+    const config = await resolveConfig({
+      env: {
+        HITL_PENDING_DEFAULT_TIMEOUT_SECONDS: '1200',
+        HITL_PENDING_TIMEOUT_POLL_INTERVAL_SECONDS: '9'
+      }
+    });
+
+    expect(config.pending.defaultTimeoutSeconds).toBe(1200);
+    expect(config.pending.timeoutPollIntervalSeconds).toBe(9);
+  });
 });

@@ -4,9 +4,11 @@ import { validateAnswerSet } from '../domain/validators.js';
 import { transitionStatus } from '../state/status-machine.js';
 import type { RedisClient } from './redis-client.js';
 import { redisKeys } from './redis-keys.js';
-import type { CreatePendingGroupInput, FinalizeResult, HitlRepository } from './hitl-repository.js';
+import type { CreatePendingGroupInput, FinalizeResult, HitlRepository, TimeoutProcessResult } from './hitl-repository.js';
 
 export class RedisHitlRepository implements HitlRepository {
+  private readonly timeoutLockSeconds = 10;
+
   constructor(
     private readonly redis: RedisClient,
     private readonly prefix: string,
@@ -36,6 +38,9 @@ export class RedisHitlRepository implements HitlRepository {
 
     const groupId = `qg_${randomUUID()}`;
     const now = new Date().toISOString();
+    const deadlineAt = input.timeout_seconds
+      ? new Date(Date.now() + input.timeout_seconds * 1000).toISOString()
+      : undefined;
     const persistedQuestions = input.questions.map((question) => ({
       ...question,
       question_id: `q_${randomUUID()}`,
@@ -49,6 +54,9 @@ export class RedisHitlRepository implements HitlRepository {
       question_group_id: groupId,
       title: input.title,
       description: input.description,
+      timeout_seconds: input.timeout_seconds,
+      auto_response_deadline_at: deadlineAt,
+      timeout_status: input.timeout_seconds ? 'pending' : undefined,
       questions: persistedQuestions,
       status: 'pending',
       created_at: now,
@@ -63,6 +71,10 @@ export class RedisHitlRepository implements HitlRepository {
     tx.expire(redisKeys.pendingScope(this.prefix, input.agent_identity, input.agent_session_id), this.ttlSeconds);
     tx.sadd(redisKeys.scopeGroups(this.prefix, input.agent_identity, input.agent_session_id), groupId);
     tx.expire(redisKeys.scopeGroups(this.prefix, input.agent_identity, input.agent_session_id), this.ttlSeconds);
+    if (deadlineAt) {
+      tx.zadd(redisKeys.timeoutDue(this.prefix), String(Date.parse(deadlineAt)), groupId);
+      tx.expire(redisKeys.timeoutDue(this.prefix), this.ttlSeconds);
+    }
     if (idemKey) {
       tx.set(idemKey, groupId, 'EX', this.ttlSeconds);
     }
@@ -262,6 +274,7 @@ export class RedisHitlRepository implements HitlRepository {
       if (hasPending) tx.sadd(redisKeys.pendingScope(this.prefix, caller.agent_identity, caller.agent_session_id), groupId);
       else tx.srem(redisKeys.pendingScope(this.prefix, caller.agent_identity, caller.agent_session_id), groupId);
       tx.expire(redisKeys.pendingScope(this.prefix, caller.agent_identity, caller.agent_session_id), this.ttlSeconds);
+      if (!hasPending) tx.zrem(redisKeys.timeoutDue(this.prefix), groupId);
     }
     await tx.exec();
 
@@ -321,6 +334,7 @@ export class RedisHitlRepository implements HitlRepository {
       }
       if (hasPending) tx.sadd(redisKeys.pendingScope(this.prefix, caller.agent_identity, caller.agent_session_id), groupId);
       else tx.srem(redisKeys.pendingScope(this.prefix, caller.agent_identity, caller.agent_session_id), groupId);
+      if (!hasPending) tx.zrem(redisKeys.timeoutDue(this.prefix), groupId);
     }
     await tx.exec();
 
@@ -344,7 +358,115 @@ export class RedisHitlRepository implements HitlRepository {
     const tx = this.redis.multi();
     tx.set(redisKeys.qg(this.prefix, groupId), JSON.stringify(nextGroup), 'EX', this.ttlSeconds);
     tx.srem(redisKeys.pendingScope(this.prefix, group.agent_identity, group.agent_session_id), groupId);
+    tx.zrem(redisKeys.timeoutDue(this.prefix), groupId);
     await tx.exec();
     return { status: 'expired', reason };
+  }
+
+  async processTimedOutGroups(limit = 20): Promise<TimeoutProcessResult[]> {
+    const dueIds = await this.redis.zrangebyscore(
+      redisKeys.timeoutDue(this.prefix),
+      0,
+      Date.now(),
+      'LIMIT',
+      0,
+      limit
+    );
+    const processed: TimeoutProcessResult[] = [];
+
+    for (const groupId of dueIds) {
+      const locked = await this.redis.set(
+        redisKeys.timeoutLock(this.prefix, groupId),
+        '1',
+        'NX',
+        'EX',
+        this.timeoutLockSeconds
+      );
+      if (locked !== 'OK') continue;
+
+      try {
+        const result = await this.autoRespondTimedOutGroup(groupId);
+        if (result) processed.push(result);
+      } finally {
+        await this.redis.del(redisKeys.timeoutLock(this.prefix, groupId));
+      }
+    }
+
+    return processed;
+  }
+
+  private scopeKey(agentIdentity: string, agentSessionId: string) {
+    return `${agentIdentity}::${agentSessionId}`;
+  }
+
+  private recomputeGroupStatus(group: ScopedQuestionGroup) {
+    const questions = group.questions as Array<Record<string, unknown>>;
+    const pending = questions.some((question) => question.status === 'pending');
+    if (pending) return 'pending';
+
+    const cancelledOnly = questions.every((question) => question.status === 'cancelled');
+    return cancelledOnly ? 'cancelled' : 'answered';
+  }
+
+  private async autoRespondTimedOutGroup(groupId: string): Promise<TimeoutProcessResult | null> {
+    const group = await this.getGroup(groupId);
+    if (!group) {
+      await this.redis.zrem(redisKeys.timeoutDue(this.prefix), groupId);
+      return null;
+    }
+
+    if (group.status !== 'pending') {
+      await this.redis.zrem(redisKeys.timeoutDue(this.prefix), groupId);
+      return null;
+    }
+
+    if (!group.auto_response_deadline_at || Date.parse(group.auto_response_deadline_at) > Date.now()) {
+      return null;
+    }
+
+    const pendingQuestions = (group.questions as Array<Record<string, unknown>>).filter(
+      (question) => question.status === 'pending'
+    );
+    if (pendingQuestions.length === 0) {
+      await this.redis.zrem(redisKeys.timeoutDue(this.prefix), groupId);
+      return null;
+    }
+
+    const now = new Date().toISOString();
+    for (const question of pendingQuestions) {
+      question.answer = question.default_answer;
+      question.status = 'answered';
+      question.auto_response_at = now;
+      question.is_timeout_auto_response = true;
+      question.updated_at = now;
+    }
+
+    group.updated_at = now;
+    group.timeout_status = 'processed';
+    group.status = this.recomputeGroupStatus(group);
+
+    const tx = this.redis.multi();
+    tx.set(redisKeys.qg(this.prefix, groupId), JSON.stringify(group), 'EX', this.ttlSeconds);
+    for (const question of group.questions as Array<Record<string, unknown>>) {
+      tx.set(redisKeys.q(this.prefix, String(question.question_id)), JSON.stringify(question), 'EX', this.ttlSeconds);
+    }
+    tx.srem(redisKeys.pendingScope(this.prefix, group.agent_identity, group.agent_session_id), groupId);
+    tx.zrem(redisKeys.timeoutDue(this.prefix), groupId);
+    await tx.exec();
+
+    const changedQuestionIds = pendingQuestions.map((question) => String(question.question_id));
+    const snapshot = await this.getScopeSnapshot(
+      {
+        agent_identity: group.agent_identity,
+        agent_session_id: group.agent_session_id
+      },
+      changedQuestionIds
+    );
+
+    return {
+      groupId,
+      scopeKey: this.scopeKey(group.agent_identity, group.agent_session_id),
+      snapshot
+    };
   }
 }

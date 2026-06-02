@@ -85,4 +85,90 @@ describe('redis repository', () => {
     expect(repeated.question_group_id).toBe(created.question_group_id);
     expect(second).toEqual(first);
   });
+
+  it('stores timeout metadata and derived default answers in redis', async () => {
+    const created = await repository.createPendingGroup({
+      agent_identity: 'api_key:a1',
+      agent_session_id: 'session-3',
+      title: 'group',
+      timeout_seconds: 900,
+      questions: [
+        {
+          type: 'single_choice',
+          title: 'pick',
+          options: [{ value: 'A', label: 'A' }],
+          default_answer: { value: 'A' }
+        }
+      ]
+    });
+
+    const stored = await repository.getGroup(created.question_group_id);
+
+    expect(stored?.timeout_seconds).toBe(900);
+    expect(stored?.questions[0]).toEqual(
+      expect.objectContaining({
+        default_answer: { value: 'A' }
+      })
+    );
+    expect(stored?.auto_response_deadline_at).toMatch(/T/);
+  });
+
+  it('auto-responds timed out pending questions with timeout metadata', async () => {
+    const created = await repository.createPendingGroup({
+      agent_identity: 'api_key:a1',
+      agent_session_id: 'session-timeout-1',
+      title: 'group',
+      timeout_seconds: 1,
+      questions: [
+        {
+          type: 'boolean',
+          title: 'approve?',
+          default_answer: { value: true }
+        }
+      ]
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 1100));
+
+    const [result] = await repository.processTimedOutGroups?.();
+    const stored = await repository.getGroup(created.question_group_id);
+
+    expect(result?.groupId).toBe(created.question_group_id);
+    expect(stored?.questions[0]).toEqual(
+      expect.objectContaining({
+        status: 'answered',
+        answer: { value: true },
+        is_timeout_auto_response: true
+      })
+    );
+  });
+
+  it('allows only one processor to claim the same timed out group', async () => {
+    const created = await repository.createPendingGroup({
+      agent_identity: 'api_key:a1',
+      agent_session_id: 'session-timeout-2',
+      title: 'group',
+      timeout_seconds: 1,
+      questions: [
+        {
+          type: 'text',
+          title: 'why',
+          default_answer: { value: 'fallback' }
+        }
+      ]
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 1100));
+
+    const [first, second] = await Promise.all([
+      repository.processTimedOutGroups?.(),
+      repository.processTimedOutGroups?.()
+    ]);
+
+    const processedCount = [...(first ?? []), ...(second ?? [])].filter(
+      (entry) => entry.groupId === created.question_group_id
+    ).length;
+
+    expect(processedCount).toBe(1);
+  });
 });
