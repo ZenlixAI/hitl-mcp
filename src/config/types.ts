@@ -24,7 +24,9 @@ export const appConfigSchema = z.object({
   }),
   pending: z.object({
     maxWaitSeconds: z.number().int().nonnegative(),
-    waitMode: z.enum(['terminal_only', 'progressive'])
+    waitMode: z.enum(['terminal_only', 'progressive']),
+    defaultTimeoutSeconds: z.number().int().positive(),
+    timeoutPollIntervalSeconds: z.number().int().positive()
   }),
   agentIdentity: z.object({
     sessionHeader: z.string().min(1),

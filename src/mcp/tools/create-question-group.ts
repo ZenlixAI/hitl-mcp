@@ -4,11 +4,20 @@ import type { HitlService } from '../../core/hitl-service.js';
 import type { Logger } from '../../observability/logger.js';
 import { readCallerScopeFromMcpContext } from '../caller-scope.js';
 
-export function registerAskTool(server: MCPServer, service: HitlService, logger: Logger) {
+export function registerAskTool(
+  server: MCPServer,
+  service: HitlService,
+  logger: Logger,
+  options: { defaultTimeoutSeconds: number }
+) {
   server.tool(
     {
       name: 'hitl_ask',
-      description: 'Create one or more pending questions for the current caller scope.',
+      description:
+        'Create one or more pending questions for the current caller scope. ' +
+        'Prefer setting explicit default_answer values when possible. ' +
+        'If omitted, the server derives a default answer per question type. ' +
+        `The current default timeout is ${options.defaultTimeoutSeconds} seconds unless timeout_seconds is provided.`,
       schema: askQuestionsInputSchema
     },
     async (input, ctx) => {

@@ -6,7 +6,12 @@ export const defaultConfig: AppConfig = {
   storage: { kind: 'memory' },
   redis: { url: 'redis://127.0.0.1:6379', keyPrefix: 'hitl' },
   ttl: { defaultSeconds: 7 * 24 * 3600, answeredRetentionSeconds: 30 * 24 * 3600 },
-  pending: { maxWaitSeconds: 0, waitMode: 'terminal_only' },
+  pending: {
+    maxWaitSeconds: 0,
+    waitMode: 'terminal_only',
+    defaultTimeoutSeconds: 900,
+    timeoutPollIntervalSeconds: 5
+  },
   agentIdentity: {
     sessionHeader: 'x-agent-session-id',
     createConflictPolicy: 'error'

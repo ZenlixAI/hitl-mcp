@@ -73,4 +73,30 @@ describe('in-memory repository scoped create', () => {
     expect(after).toHaveLength(1);
     expect(String(after[0].question_id)).toBe(secondQuestionId);
   });
+
+  it('stores timeout settings and default answers on created groups', async () => {
+    const repository = new InMemoryHitlRepository();
+
+    const created = await repository.createPendingGroup({
+      agent_identity: 'api_key:a4',
+      agent_session_id: 'session-4',
+      title: 'Timed question',
+      timeout_seconds: 900,
+      questions: [
+        {
+          title: 'Why?',
+          type: 'text',
+          default_answer: { value: 'fallback' }
+        }
+      ]
+    });
+
+    expect(created.timeout_seconds).toBe(900);
+    expect(created.questions[0]).toEqual(
+      expect.objectContaining({
+        default_answer: { value: 'fallback' }
+      })
+    );
+    expect(created.auto_response_deadline_at).toMatch(/T/);
+  });
 });

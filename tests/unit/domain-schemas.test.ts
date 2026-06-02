@@ -39,4 +39,34 @@ describe('domain schemas', () => {
 
     expect(parsed.success).toBe(true);
   });
+
+  it('accepts timeout_seconds and default_answer in ask schema', () => {
+    const parsed = askQuestionsInputSchema.safeParse({
+      title: 'group',
+      timeout_seconds: 900,
+      questions: [
+        {
+          type: 'single_choice',
+          title: 'approve?',
+          options: [
+            { value: 'yes', label: 'Yes' },
+            { value: 'no', label: 'No' }
+          ],
+          default_answer: { value: 'no' }
+        }
+      ]
+    });
+
+    expect(parsed.success).toBe(true);
+  });
+
+  it('rejects non-positive timeout_seconds in ask schema', () => {
+    const parsed = askQuestionsInputSchema.safeParse({
+      title: 'group',
+      timeout_seconds: 0,
+      questions: [{ type: 'boolean', title: 'approve?' }]
+    });
+
+    expect(parsed.success).toBe(false);
+  });
 });

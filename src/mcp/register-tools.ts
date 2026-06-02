@@ -8,8 +8,13 @@ import { registerWaitTool } from './tools/wait-question-group.js';
 import { registerCancelQuestionsTool } from './tools/cancel-question-group.js';
 import { registerSubmitAnswersTool } from './tools/submit-answers.js';
 
-export function registerHitlTools(server: MCPServer, service: HitlService, logger: Logger) {
-  registerAskTool(server, service, logger);
+export function registerHitlTools(
+  server: MCPServer,
+  service: HitlService,
+  logger: Logger,
+  options: { defaultTimeoutSeconds: number }
+) {
+  registerAskTool(server, service, logger, options);
   registerWaitTool(server, service, logger);
   registerGetPendingQuestionsTool(server, service, logger);
   registerGetQuestionTool(server, service, logger);

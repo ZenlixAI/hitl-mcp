@@ -93,12 +93,18 @@ export class InMemoryHitlRepository implements HitlRepository {
     }
 
     const now = new Date().toISOString();
+    const deadlineAt = input.timeout_seconds
+      ? new Date(Date.now() + input.timeout_seconds * 1000).toISOString()
+      : undefined;
     const group: ScopedQuestionGroup = {
       agent_identity: input.agent_identity,
       agent_session_id: input.agent_session_id,
       question_group_id: `qg_${randomUUID()}`,
       title: input.title,
       description: input.description,
+      timeout_seconds: input.timeout_seconds,
+      auto_response_deadline_at: deadlineAt,
+      timeout_status: input.timeout_seconds ? 'pending' : undefined,
       questions: input.questions.map((question) => ({
         ...question,
         question_id: `q_${randomUUID()}`,

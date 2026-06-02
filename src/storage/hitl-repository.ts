@@ -11,12 +11,19 @@ export interface FinalizeResult {
   is_complete?: boolean;
 }
 
+export interface TimeoutProcessResult {
+  groupId: string;
+  scopeKey: string;
+  snapshot: ScopeQuestionSnapshot;
+}
+
 export interface CreatePendingGroupInput {
   agent_identity: string;
   agent_session_id: string;
   title: string;
   description?: string;
   ttl_seconds?: number;
+  timeout_seconds?: number;
   questions: Array<Record<string, unknown>>;
   idempotency_key?: string;
   extra?: Record<string, unknown>;
@@ -49,5 +56,6 @@ export interface HitlRepository {
     cancelAll?: boolean,
     reason?: string
   ): Promise<ScopeQuestionSnapshot & { status: 'cancelled' }>;
+  processTimedOutGroups?(): Promise<TimeoutProcessResult[]>;
   expireGroup(groupId: string, reason?: string): Promise<{ status: 'expired'; reason?: string }>;
 }

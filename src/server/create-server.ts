@@ -14,6 +14,8 @@ import { InMemoryHitlRepository } from '../storage/in-memory-repository.js';
 import { createRedisClient } from '../storage/redis-client.js';
 import { RedisHitlRepository } from '../storage/redis-hitl-repository.js';
 import { Waiter } from '../state/waiter.js';
+import { RedisTimeoutWorker } from '../state/redis-timeout-worker.js';
+import { redisKeys } from '../storage/redis-keys.js';
 
 async function resolveRepository(params: {
   storageKind: 'memory' | 'redis';
@@ -64,7 +66,8 @@ export async function createRuntime() {
     waiter,
     config.pending.maxWaitSeconds,
     config.pending.waitMode,
-    metrics
+    metrics,
+    config.pending.defaultTimeoutSeconds
   );
   const server = new MCPServer({
     name: config.server.name,
@@ -96,7 +99,9 @@ export async function createRuntime() {
       throw error;
     }
   });
-  registerHitlTools(server, service, logger);
+  registerHitlTools(server, service, logger, {
+    defaultTimeoutSeconds: config.pending.defaultTimeoutSeconds
+  });
   const app = server.app;
 
   app.onError((error, c) => {
@@ -162,6 +167,27 @@ export async function createRuntime() {
   });
 
   app.route(config.http.apiPrefix, questionRoutes({ service, metrics, logger }));
+
+  if (repository instanceof RedisHitlRepository) {
+    const eventChannel = redisKeys.timeoutEvents(config.redis.keyPrefix);
+    const subscriber = createRedisClient(config.redis.url);
+    await subscriber.connect();
+    await subscriber.subscribe(eventChannel);
+    subscriber.on('message', (_channel, raw) => {
+      const event = JSON.parse(raw) as { scopeKey: string; snapshot: unknown };
+      waiter.notify(event.scopeKey, event.snapshot);
+    });
+
+    const publisher = createRedisClient(config.redis.url);
+    await publisher.connect();
+    const timeoutWorker = new RedisTimeoutWorker(
+      repository,
+      publisher,
+      eventChannel,
+      config.pending.timeoutPollIntervalSeconds
+    );
+    timeoutWorker.start();
+  }
 
   return { app, server, repository, waiter, service, config, metrics };
 }

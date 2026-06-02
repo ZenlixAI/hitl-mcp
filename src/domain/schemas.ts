@@ -14,7 +14,8 @@ const publicCreateQuestionFields = {
   description: z.string().optional(),
   tags: z.array(z.string()).optional(),
   extra: z.record(z.string(), z.any()).optional(),
-  required: z.boolean().default(true)
+  required: z.boolean().default(true),
+  default_answer: z.object({ value: z.any() }).optional()
 };
 
 const optionSchema = z.object({
@@ -141,6 +142,7 @@ export const askQuestionsInputSchema = z
     tags: z.array(z.string()).optional(),
     extra: z.record(z.string(), z.any()).optional(),
     ttl_seconds: z.number().int().positive().optional(),
+    timeout_seconds: z.number().int().positive().optional(),
     questions: z.array(askQuestionSchema).min(1),
     idempotency_key: z.string().optional()
   })

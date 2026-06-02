@@ -1,8 +1,16 @@
 import type { z } from 'zod';
 import type { askQuestionSchema, askQuestionsInputSchema, questionSchema, submitAnswersInputSchema } from './schemas.js';
 
-export type Question = z.infer<typeof questionSchema>;
-export type AskQuestion = z.infer<typeof askQuestionSchema>;
+export type AnswerValue = { value: unknown };
+
+export type Question = z.infer<typeof questionSchema> & {
+  default_answer?: AnswerValue;
+  auto_response_at?: string;
+  is_timeout_auto_response?: boolean;
+};
+export type AskQuestion = z.infer<typeof askQuestionSchema> & {
+  default_answer?: AnswerValue;
+};
 export type AskQuestionsInput = z.infer<typeof askQuestionsInputSchema>;
 export type SubmitAnswersInput = z.infer<typeof submitAnswersInputSchema>;
 
@@ -18,6 +26,9 @@ export type ScopedQuestionGroup = CallerScope & {
   question_group_id: string;
   title: string;
   description?: string;
+  timeout_seconds?: number;
+  auto_response_deadline_at?: string;
+  timeout_status?: 'pending' | 'processed';
   questions: Array<Record<string, any>>;
   status: GroupStatus;
   created_at: string;

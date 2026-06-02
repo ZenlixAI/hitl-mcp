@@ -1,5 +1,6 @@
 import { askQuestionsInputSchema, cancelQuestionsInputSchema, submitAnswersInputSchema, waitQuestionsInputSchema } from '../domain/schemas.js';
-import type { CallerScope, ScopeQuestionSnapshot } from '../domain/types.js';
+import { resolveDefaultAnswer } from '../domain/default-answer.js';
+import type { AskQuestion, CallerScope, Question, ScopeQuestionSnapshot } from '../domain/types.js';
 import type { HitlMetrics } from '../observability/metrics.js';
 import type { HitlRepository } from '../storage/hitl-repository.js';
 import type { Waiter } from '../state/waiter.js';
@@ -10,7 +11,8 @@ export class HitlService {
     private readonly waiter: Waiter,
     private readonly maxWaitSeconds: number,
     private readonly waitMode: 'terminal_only' | 'progressive',
-    private readonly metrics?: HitlMetrics
+    private readonly metrics?: HitlMetrics,
+    private readonly defaultTimeoutSeconds = 900
   ) {}
 
   private scopeKey(caller: CallerScope) {
@@ -22,10 +24,24 @@ export class HitlService {
     input: unknown;
   }) {
     const parsed = askQuestionsInputSchema.parse(params.input);
+    const timeoutSeconds = parsed.timeout_seconds ?? this.defaultTimeoutSeconds;
+    const questions = parsed.questions.map((question, index) => {
+      const draftQuestion: Question = {
+        ...(question as AskQuestion),
+        question_id: `draft_${index + 1}`
+      };
+
+      return {
+        ...question,
+        default_answer: resolveDefaultAnswer(draftQuestion, question.default_answer)
+      };
+    });
     const created = await this.repository.createPendingGroup({
       agent_identity: params.caller.agent_identity,
       agent_session_id: params.caller.agent_session_id,
-      ...parsed
+      ...parsed,
+      timeout_seconds: timeoutSeconds,
+      questions
     });
     return created.questions;
   }

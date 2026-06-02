@@ -109,6 +109,7 @@
 - 服务端生成的 `question_id`
 - `type`（问题类型）
 - `title`、`description`、`tags`、`extra` 等提示信息
+- 可选的 `default_answer`
 - `pending`、`answered`、`skipped`、`cancelled` 等状态
 
 当前支持的问题类型：
@@ -158,6 +159,30 @@
 - 稍后再回答另一个问题
 - 显式跳过可选问题
 - 持续 wait，直到当前 scope 完成
+
+### 超时自动应答
+
+问题组在创建时也可以附带超时行为。
+
+- 调用方可以传 `timeout_seconds`
+- 如果不传，服务端会使用 `HITL_PENDING_DEFAULT_TIMEOUT_SECONDS`
+- 每个 question 都可以设置 `default_answer`
+- 如果不传，服务端会按问题类型自动推导
+
+当后端存储为 Redis 时，超过超时时间仍然处于 pending 的问题会被自动用默认答案回答。
+
+自动推导规则如下：
+
+- `single_choice`：第一个选项值
+- `multi_choice`：仅包含第一个选项值的数组
+- `boolean`：`true`
+- `range`：`range_constraints.min`
+- `text`：`"none"`
+
+因超时产生的答案仍然使用正常的 `answered` 状态，但会附带额外元数据：
+
+- `auto_response_at`
+- `is_timeout_auto_response`
 
 ### 等待模式
 
@@ -284,6 +309,14 @@ curl -X POST "http://localhost:3000/api/v1/questions" \
 2. 服务端更新 scope 状态并通知 waiter
 3. 如果 scope 下不再有 pending questions，则该 scope 进入 terminal 状态
 
+### 流程 5：超时自动应答
+
+1. Agent 创建问题时显式或隐式带上超时行为。
+2. 在 Redis 模式下，服务端会把 pending group 加入超时调度。
+3. 如果超时前没有人工响应，Redis 超时 worker 会自动回答剩余 pending questions。
+4. Worker 会发布 scope 更新事件，确保任意实例上的 waiter 都能被唤醒。
+5. `hitl_wait` 返回完成后的 scope snapshot，并在受影响的问题上带回超时元数据。
+
 ### 为什么 wait 是 scope 级别
 
 wait 始终是 **scope 级操作**，这是有意为之：
@@ -315,10 +348,12 @@ wait 始终是 **scope 级操作**，这是有意为之：
   "title": "Release decision",
   "description": "Human approval required before deploy",
   "ttl_seconds": 3600,
+  "timeout_seconds": 900,
   "questions": [
     {
       "type": "boolean",
-      "title": "Approve deployment?"
+      "title": "Approve deployment?",
+      "default_answer": { "value": true }
     }
   ]
 }
@@ -329,6 +364,9 @@ wait 始终是 **scope 级操作**，这是有意为之：
 - 调用方不能传 `question_id`
 - `question_id` 由服务端生成
 - 一次请求可以创建多个问题
+- 建议显式提供 `default_answer`
+- 如果不提供 `default_answer`，服务端会自动推导
+- 如果不提供 `timeout_seconds`，服务端会使用当前默认超时时间
 
 ### `hitl_wait`
 
@@ -347,6 +385,11 @@ wait 始终是 **scope 级操作**，这是有意为之：
 - `is_complete`
 
 `resolved_questions` 会返回已经完成的问题完整对象，以及对应的最终状态和可用时的答案。
+
+如果结果来自超时自动应答，对应 question 还可能包含：
+
+- `auto_response_at`
+- `is_timeout_auto_response`
 
 ### `hitl_get_pending_questions`
 
@@ -473,6 +516,7 @@ HTTP 控制面主要面向运营界面、业务后端和排障工具。
   "title": "Release decision",
   "description": "Human approval required before deploy",
   "ttl_seconds": 3600,
+  "timeout_seconds": 900,
   "questions": [
     {
       "type": "single_choice",
@@ -480,12 +524,14 @@ HTTP 控制面主要面向运营界面、业务后端和排障工具。
       "options": [
         { "value": "yes", "label": "Yes" },
         { "value": "no", "label": "No" }
-      ]
+      ],
+      "default_answer": { "value": "no" }
     },
     {
       "type": "text",
       "title": "Anything to note?",
-      "required": false
+      "required": false,
+      "default_answer": { "value": "none" }
     }
   ]
 }
@@ -498,6 +544,11 @@ HTTP 控制面主要面向运营界面、业务后端和排障工具。
 - `text`，可选 `text_constraints`
 - `boolean`
 - `range`，带 `range_constraints`
+
+额外的创建时字段：
+
+- `timeout_seconds`：可选的正整数问题组超时时间
+- `default_answer`：可选的 question 级兜底答案，供 Redis 超时自动应答使用
 
 ### `GET /api/v1/questions/pending`
 
@@ -592,6 +643,8 @@ HTTP 控制面主要面向运营界面、业务后端和排障工具。
 | `HITL_ANSWERED_RETENTION_SECONDS` | `2592000` | 已回答状态的保留时长。 | 当审计需求或存储压力要求不同保留策略时。 |
 | `HITL_PENDING_MAX_WAIT_SECONDS` | `0` | 单次 wait 的最大时长。`0` 表示不限制。 | 当你需要控制 worker 占用时长或请求生命周期上限时。 |
 | `HITL_WAIT_MODE` | `terminal_only` | scope wait 行为：`terminal_only` 或 `progressive`。 | 当调用方需要感知每一次中间变化时设置为 `progressive`。 |
+| `HITL_PENDING_DEFAULT_TIMEOUT_SECONDS` | `900` | 新创建问题组在未传 `timeout_seconds` 时使用的默认超时。 | 当不同环境对人工响应 SLA 的要求不同时。 |
+| `HITL_PENDING_TIMEOUT_POLL_INTERVAL_SECONDS` | `5` | Redis 超时 worker 的轮询间隔。与精确超时边界有少量偏差是允许的。 | 当你希望更紧或更松的超时触发粒度时。 |
 | `HITL_AGENT_SESSION_HEADER` | `x-agent-session-id` | 读取 `agent_session_id` 的 header 名称。 | 当你接入现有网关或客户端，需要复用其他 session header 时。 |
 | `HITL_CREATE_CONFLICT_POLICY` | `error` | 配置面中的创建冲突策略。 | 建议保持默认。当前代码会加载并校验，但 handler 尚未实际使用。 |
 | `HITL_LOG_LEVEL` | `info` | 结构化日志级别：`debug`、`info`、`warn`、`error`。 | 需要排障时提高，生产环境需要降噪时调低。 |
@@ -615,6 +668,8 @@ ttl:
 pending:
   maxWaitSeconds: 0
   waitMode: terminal_only
+  defaultTimeoutSeconds: 900
+  timeoutPollIntervalSeconds: 5
 agentIdentity:
   sessionHeader: x-agent-session-id
   createConflictPolicy: error
@@ -630,12 +685,14 @@ observability:
 - `HITL_STORAGE=memory`
 - 让客户端或测试工具显式发送 `x-agent-identity`
 - `HITL_WAIT_MODE` 保持 `terminal_only`
+- 该模式下不会启用超时自动应答
 
 #### 共享开发环境或测试环境
 
 - `HITL_STORAGE=redis`
 - 配置真实可达的 `MCP_URL`
 - 使用独立的 `HITL_REDIS_PREFIX`
+- 评审 `HITL_PENDING_DEFAULT_TIMEOUT_SECONDS`
 - 确保上游调用方始终发送 `x-agent-identity`
 
 #### 生产环境
@@ -644,6 +701,7 @@ observability:
 - 将 `MCP_URL` 设为外部真实可达 URL
 - readiness 探针接 `/api/v1/readyz`
 - 明确评审 TTL 和 retention 配置
+- 明确评审超时与轮询参数
 - 确保上游调用方始终发送 `x-agent-identity`
 
 ---
@@ -677,12 +735,20 @@ observability:
 3. 通知该 scope 对应的 waiter
 4. `hitl_wait` 根据 wait mode 决定如何返回
 
+在 Redis 模式下，超时自动应答也会产生 waiter 通知。超时 worker 会通过 Redis pub/sub 发布 scope 更新，因此即使 waiter 挂在另一个实例上，也能被正确唤醒。
+
 ### 存储选择
 
 当前有两种存储模式：
 
 - **memory**：简单、进程内、本地开发和测试友好
 - **redis**：适合多进程和真实部署
+
+只有 Redis 模式会启用超时自动应答。它依赖：
+
+- Redis sorted set 做超时调度
+- 短生命周期分布式锁避免多实例重复处理
+- Redis pub/sub 把状态变化广播给其他实例上的 waiter
 
 当配置为 Redis 但运行时初始化连接失败时，服务会回退到内存存储并记录 warning。
 
@@ -734,6 +800,8 @@ observability:
 
 - 面向本地开发和测试的 in-memory 实现
 - 面向真实部署的 Redis 实现
+
+Redis 实现还负责超时调度、分布式加锁，以及超时后默认答案的持久化。
 
 ### 5. 可观测性层
 

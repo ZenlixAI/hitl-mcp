@@ -13,4 +13,12 @@ describe('mcp tool registration', () => {
     expect(names).toContain('hitl_cancel_questions');
     expect(names).toContain('hitl_get_question');
   });
+
+  it('registers hitl_ask with timeout and default-answer guidance', async () => {
+    const runtime = await createRuntime();
+    const hitlAsk = (runtime.server as any).registrations.tools.get('hitl_ask');
+
+    expect(hitlAsk.config.description).toContain('default_answer');
+    expect(hitlAsk.config.description).toContain('900 seconds');
+  });
 });

@@ -109,6 +109,7 @@ A question has:
 - a server-generated `question_id`
 - a `type`
 - prompt metadata such as `title`, `description`, `tags`, and `extra`
+- an optional `default_answer`
 - a status such as `pending`, `answered`, `skipped`, or `cancelled`
 
 Supported question types:
@@ -158,6 +159,30 @@ The server accepts incremental progress:
 - answer another question later
 - skip optional questions explicitly
 - continue waiting until the scope becomes complete
+
+### Timeout auto-response
+
+Question groups may also define timeout behavior at creation time.
+
+- callers may set `timeout_seconds`
+- if omitted, the server uses `HITL_PENDING_DEFAULT_TIMEOUT_SECONDS`
+- each question may set `default_answer`
+- if omitted, the server derives one by question type
+
+When the backend storage is Redis, timed-out pending questions are automatically answered with their resolved default answers.
+
+The derived defaults are:
+
+- `single_choice`: first option value
+- `multi_choice`: first option value as a single-element array
+- `boolean`: `true`
+- `range`: `range_constraints.min`
+- `text`: `"none"`
+
+Timeout-generated answers keep the normal `answered` status and add metadata such as:
+
+- `auto_response_at`
+- `is_timeout_auto_response`
 
 ### Wait modes
 
@@ -284,6 +309,14 @@ This section describes the intended runtime flow, regardless of whether the call
 2. The server updates scope state and notifies waiters.
 3. If no pending questions remain, the scope becomes terminal.
 
+### Sequence 5: timeout auto-response
+
+1. The Agent creates questions with explicit or implicit timeout behavior.
+2. In Redis mode, the server schedules the pending group for timeout processing.
+3. If no human response arrives before the deadline, a Redis-backed timeout worker auto-answers remaining pending questions.
+4. The worker publishes a scope update so waiters on any instance can wake up.
+5. `hitl_wait` returns the completed scope snapshot with timeout metadata on affected questions.
+
 ### Scope semantics
 
 Wait is always a **scope-level** operation.
@@ -317,10 +350,12 @@ Input shape:
   "title": "Release decision",
   "description": "Human approval required before deploy",
   "ttl_seconds": 3600,
+  "timeout_seconds": 900,
   "questions": [
     {
       "type": "boolean",
-      "title": "Approve deployment?"
+      "title": "Approve deployment?",
+      "default_answer": { "value": true }
     }
   ]
 }
@@ -331,6 +366,9 @@ Notes:
 - `question_id` must not be provided by the caller
 - the server generates `question_id`
 - one request can create multiple questions
+- explicit `default_answer` is recommended
+- if `default_answer` is omitted, the server derives one
+- if `timeout_seconds` is omitted, the server uses the configured default timeout
 
 ### `hitl_wait`
 
@@ -349,6 +387,11 @@ Typical response fields:
 - `is_complete`
 
 `resolved_questions` contains the full resolved question objects plus their final status and any stored answer.
+
+When a result was produced by timeout automation, the resolved question may also include:
+
+- `auto_response_at`
+- `is_timeout_auto_response`
 
 ### `hitl_get_pending_questions`
 
@@ -475,6 +518,7 @@ Request body:
   "title": "Release decision",
   "description": "Human approval required before deploy",
   "ttl_seconds": 3600,
+  "timeout_seconds": 900,
   "questions": [
     {
       "type": "single_choice",
@@ -482,12 +526,14 @@ Request body:
       "options": [
         { "value": "yes", "label": "Yes" },
         { "value": "no", "label": "No" }
-      ]
+      ],
+      "default_answer": { "value": "no" }
     },
     {
       "type": "text",
       "title": "Anything to note?",
-      "required": false
+      "required": false,
+      "default_answer": { "value": "none" }
     }
   ]
 }
@@ -500,6 +546,11 @@ Supported question payloads:
 - `text` with optional `text_constraints`
 - `boolean`
 - `range` with `range_constraints`
+
+Additional create-time fields:
+
+- `timeout_seconds`: optional positive integer timeout for the group
+- `default_answer`: optional per-question fallback answer used by Redis timeout auto-response
 
 ### `GET /api/v1/questions/pending`
 
@@ -594,6 +645,8 @@ The following environment variables are currently supported by the codebase.
 | `HITL_ANSWERED_RETENTION_SECONDS` | `2592000` | Retention window for answered state. | Change when auditability or storage pressure requires a different retention period. |
 | `HITL_PENDING_MAX_WAIT_SECONDS` | `0` | Maximum duration for one wait call. `0` means no timeout limit. | Change when you need bounded waits for worker scheduling or request lifecycle control. |
 | `HITL_WAIT_MODE` | `terminal_only` | Scope wait behavior: `terminal_only` or `progressive`. | Set to `progressive` when callers must react to each intermediate update. |
+| `HITL_PENDING_DEFAULT_TIMEOUT_SECONDS` | `900` | Default timeout for newly created pending question groups when `timeout_seconds` is omitted. | Change when human response SLAs differ across environments. |
+| `HITL_PENDING_TIMEOUT_POLL_INTERVAL_SECONDS` | `5` | Polling interval for the Redis timeout worker. Small drift from the exact timeout boundary is acceptable. | Change when you want tighter or looser timeout-trigger granularity. |
 | `HITL_AGENT_SESSION_HEADER` | `x-agent-session-id` | Header name used to read `agent_session_id`. | Change when integrating with an existing gateway or client that uses another session header. |
 | `HITL_CREATE_CONFLICT_POLICY` | `error` | Create conflict policy in config surface. | Keep at default. The current code validates and loads it, but it is not currently applied by request handlers. |
 | `HITL_LOG_LEVEL` | `info` | Structured logging level: `debug`, `info`, `warn`, `error`. | Raise or lower verbosity to match debugging and production noise requirements. |
@@ -617,6 +670,8 @@ ttl:
 pending:
   maxWaitSeconds: 0
   waitMode: terminal_only
+  defaultTimeoutSeconds: 900
+  timeoutPollIntervalSeconds: 5
 agentIdentity:
   sessionHeader: x-agent-session-id
   createConflictPolicy: error
@@ -632,12 +687,14 @@ observability:
 - `HITL_STORAGE=memory`
 - send `x-agent-identity` from your client or test harness
 - keep `HITL_WAIT_MODE=terminal_only`
+- timeout auto-response is disabled in this mode
 
 ### Shared dev or staging
 
 - `HITL_STORAGE=redis`
 - set a real `MCP_URL`
 - use a distinct `HITL_REDIS_PREFIX`
+- review `HITL_PENDING_DEFAULT_TIMEOUT_SECONDS`
 - ensure upstream callers always provide `x-agent-identity`
 
 ### Production
@@ -646,6 +703,7 @@ observability:
 - set `MCP_URL` to the externally reachable URL
 - wire readiness to `/api/v1/readyz`
 - review TTL and retention values explicitly
+- review timeout and polling values explicitly
 - ensure upstream callers always provide `x-agent-identity`
 
 ---
@@ -679,12 +737,20 @@ When answers or cancellations arrive:
 3. the waiter for that scope is notified
 4. `hitl_wait` resolves according to the configured wait mode
 
+In Redis mode, timeout auto-response also produces waiter notifications. The timeout worker publishes scope updates through Redis pub/sub so a waiter blocked on one instance can still wake up when another instance performs the auto-response.
+
 ### Storage selection
 
 Two storage modes exist:
 
 - **memory**: simple, process-local, good for tests and local development
 - **redis**: durable across processes and suitable for real deployments
+
+Only the Redis mode enables timeout auto-response. It uses:
+
+- a Redis sorted set for due-time scheduling
+- short-lived distributed locks to avoid double-processing in multi-instance deployments
+- Redis pub/sub to notify waiters across instances
 
 If Redis is selected but unavailable during runtime initialization, the server falls back to in-memory storage and logs a warning.
 
@@ -735,6 +801,8 @@ Provides repository implementations for:
 
 - in-memory development and tests
 - Redis-backed persistence
+
+The Redis implementation also owns timeout scheduling, distributed lock acquisition, and timeout-driven default-answer persistence.
 
 ### 5. Observability layer
 
