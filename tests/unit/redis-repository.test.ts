@@ -1,14 +1,20 @@
-import { describe, it, expect, beforeEach } from 'vitest';
-import Redis from 'ioredis-mock';
+import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { RedisHitlRepository } from '../../src/storage/redis-hitl-repository.js';
+import { createRedisTestContext, type RedisTestContext } from '../helpers/redis-test-client.js';
 
 describe('redis repository', () => {
-  let redis: Redis;
+  let testContext: RedisTestContext;
+  let redis: ReturnType<RedisTestContext['createClient']>;
   let repository: RedisHitlRepository;
 
   beforeEach(() => {
-    redis = new Redis();
-    repository = new RedisHitlRepository(redis as any, 'hitl-test', 3600);
+    testContext = createRedisTestContext('hitl-test-unit');
+    redis = testContext.createClient();
+    repository = new RedisHitlRepository(redis as any, testContext.prefix, 3600);
+  });
+
+  afterEach(async () => {
+    await testContext.cleanup();
   });
 
   it('stores generated pending group and fetches it by scope and question id', async () => {

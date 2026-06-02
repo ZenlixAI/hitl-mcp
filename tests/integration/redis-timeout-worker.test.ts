@@ -1,30 +1,32 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import Redis from 'ioredis-mock';
 import { HitlService } from '../../src/core/hitl-service.js';
 import { InMemoryHitlRepository } from '../../src/storage/in-memory-repository.js';
 import { RedisHitlRepository } from '../../src/storage/redis-hitl-repository.js';
 import { Waiter } from '../../src/state/waiter.js';
 import { RedisTimeoutWorker } from '../../src/state/redis-timeout-worker.js';
 import { redisKeys } from '../../src/storage/redis-keys.js';
+import { createRedisTestContext, type RedisTestContext } from '../helpers/redis-test-client.js';
 
 describe('redis timeout worker', () => {
   const workers: RedisTimeoutWorker[] = [];
-  const clients: Redis[] = [];
+  let testContext: RedisTestContext | null = null;
 
   afterEach(async () => {
     for (const worker of workers) worker.stop();
     workers.length = 0;
-    await Promise.all(clients.map((client) => client.quit()));
-    clients.length = 0;
+    if (testContext) {
+      await testContext.cleanup();
+      testContext = null;
+    }
   });
 
   it('wakes a terminal waiter after timeout automation via pubsub notification', async () => {
-    const store = new Redis();
-    const publisher = new Redis();
-    const subscriber = new Redis();
-    clients.push(store, publisher, subscriber);
+    testContext = createRedisTestContext('hitl-test-integration');
+    const store = testContext.createClient();
+    const publisher = testContext.createClient();
+    const subscriber = testContext.createClient();
 
-    const prefix = 'hitl-test';
+    const prefix = testContext.prefix;
     const repository = new RedisHitlRepository(store as any, prefix, 3600);
     const waiter = new Waiter();
     const service = new HitlService(repository, waiter, 0, 'terminal_only');
