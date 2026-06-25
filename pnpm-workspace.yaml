@@ -1,0 +1,7 @@
+allowBuilds:
+  '@modelcontextprotocol/ext-apps': true
+  '@parcel/watcher': true
+  '@scarf/scarf': true
+  core-js: true
+  esbuild: true
+  protobufjs: true
