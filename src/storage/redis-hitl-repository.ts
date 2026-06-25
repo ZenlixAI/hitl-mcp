@@ -378,9 +378,9 @@ export class RedisHitlRepository implements HitlRepository {
       const locked = await this.redis.set(
         redisKeys.timeoutLock(this.prefix, groupId),
         '1',
-        'NX',
         'EX',
-        this.timeoutLockSeconds
+        this.timeoutLockSeconds,
+        'NX'
       );
       if (locked !== 'OK') continue;
 
