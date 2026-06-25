@@ -78,6 +78,7 @@ export async function createRuntime() {
     host: config.http.host,
     baseUrl: config.server.baseUrl,
     favicon: 'favicon.ico',
+    stateless: false,
     icons: [
       {
         src: 'icon.svg',
@@ -141,6 +142,8 @@ export async function createRuntime() {
   });
 
   app.use('/mcp*', questionContext);
+  app.use('/sse*', questionContext);
+
 
   app.use(`${config.http.apiPrefix}/questions`, questionContext);
   app.use(`${config.http.apiPrefix}/questions/pending`, questionContext);
