@@ -7,6 +7,7 @@ import { questionRoutes } from '../http/routes/questions.js';
 import { fail, ok } from '../http/response.js';
 import { injectCallerScopeIntoMcpState } from '../mcp/caller-scope.js';
 import { registerHitlTools } from '../mcp/register-tools.js';
+import { attachMcpSessionLogging } from '../mcp/session-logging.js';
 import { Logger } from '../observability/logger.js';
 import { HitlMetrics } from '../observability/metrics.js';
 import type { HitlRepository } from '../storage/hitl-repository.js';
@@ -68,7 +69,8 @@ export async function createRuntime() {
     config.pending.maxWaitSeconds,
     config.pending.waitMode,
     metrics,
-    config.pending.defaultTimeoutSeconds
+    config.pending.defaultTimeoutSeconds,
+    logger
   );
   const server = new MCPServer({
     name: config.server.name,
@@ -87,6 +89,7 @@ export async function createRuntime() {
       }
     ]
   });
+  attachMcpSessionLogging(server as unknown as { sessions: Map<string, unknown> }, logger);
   server.use('mcp:tools/call', async (ctx, next) => {
     try {
       injectCallerScopeIntoMcpState(ctx, {
@@ -195,7 +198,8 @@ export async function createRuntime() {
     const timeoutWorker = new MemoryTimeoutWorker(
       repository,
       waiter,
-      config.pending.timeoutPollIntervalSeconds
+      config.pending.timeoutPollIntervalSeconds,
+      logger
     );
     timeoutWorker.start();
   }

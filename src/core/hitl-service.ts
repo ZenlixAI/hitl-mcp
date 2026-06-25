@@ -2,6 +2,7 @@ import { askQuestionsInputSchema, cancelQuestionsInputSchema, submitAnswersInput
 import { resolveDefaultAnswer } from '../domain/default-answer.js';
 import type { AskQuestion, CallerScope, Question, ScopeQuestionSnapshot } from '../domain/types.js';
 import type { HitlMetrics } from '../observability/metrics.js';
+import type { Logger } from '../observability/logger.js';
 import type { HitlRepository } from '../storage/hitl-repository.js';
 import type { Waiter } from '../state/waiter.js';
 
@@ -12,11 +13,40 @@ export class HitlService {
     private readonly maxWaitSeconds: number,
     private readonly waitMode: 'terminal_only' | 'progressive',
     private readonly metrics?: HitlMetrics,
-    private readonly defaultTimeoutSeconds = 900
+    private readonly defaultTimeoutSeconds = 900,
+    private readonly logger?: Logger
   ) {}
 
   private scopeKey(caller: CallerScope) {
     return `${caller.agent_identity}::${caller.agent_session_id}`;
+  }
+
+  private logWaitCompleted(
+    caller: CallerScope,
+    startedAt: number,
+    result: {
+      status: string;
+      is_terminal: boolean;
+      pending_questions: Array<Record<string, unknown>>;
+      resolved_questions: Array<unknown>;
+      answered_question_ids: string[];
+      skipped_question_ids: string[];
+      cancelled_question_ids: string[];
+    }
+  ) {
+    this.logger?.info('wait_completed', {
+      agent_identity: caller.agent_identity,
+      agent_session_id: caller.agent_session_id,
+      wait_mode: this.waitMode,
+      duration_ms: Date.now() - startedAt,
+      status: result.status,
+      is_terminal: result.is_terminal,
+      pending_question_count: result.pending_questions.length,
+      resolved_question_count: result.resolved_questions.length,
+      answered_question_count: result.answered_question_ids.length,
+      skipped_question_count: result.skipped_question_ids.length,
+      cancelled_question_count: result.cancelled_question_ids.length
+    });
   }
 
   async askQuestions(params: {
@@ -63,30 +93,38 @@ export class HitlService {
       while (true) {
         const snapshot = await this.repository.getScopeSnapshot(params.caller);
         if (snapshot.is_complete) {
-          return {
+          const result = {
             status: 'completed',
             is_terminal: true,
             ...snapshot
           };
+          this.logWaitCompleted(params.caller, start, result);
+          return result;
         }
 
         const event = await this.waiter.wait(scopeKey, observedVersion, timeoutMs);
         observedVersion = event.version;
         const result = event.payload as ScopeQuestionSnapshot;
         if (this.waitMode === 'progressive') {
-          return {
+          const progressiveResult = {
             status: result.is_complete ? 'completed' : 'in_progress',
             is_terminal: result.is_complete,
             ...result
           };
+          if (progressiveResult.is_terminal) {
+            this.logWaitCompleted(params.caller, start, progressiveResult);
+          }
+          return progressiveResult;
         }
 
         if (result.is_complete) {
-          return {
+          const completedResult = {
             status: 'completed',
             is_terminal: true,
             ...result
           };
+          this.logWaitCompleted(params.caller, start, completedResult);
+          return completedResult;
         }
       }
     } finally {
