@@ -169,7 +169,10 @@
 - 每个 question 都可以设置 `default_answer`
 - 如果不传，服务端会按问题类型自动推导
 
-当后端存储为 Redis 时，超过超时时间仍然处于 pending 的问题会被自动用默认答案回答。
+超过超时时间仍然处于 pending 的问题会被自动用默认答案回答。
+
+- 在 `memory` 模式下，会通过进程内 timeout worker 支持单进程部署场景
+- 在 `redis` 模式下，会通过 Redis 超时处理支持跨实例场景
 
 自动推导规则如下：
 
@@ -192,6 +195,8 @@
 - `progressive`：每次状态变化都返回一次，调用方可继续 wait
 
 `terminal_only` 适合线性流程；`progressive` 适合调用方需要对中间进度做实时响应的场景。
+
+当 `hitl_wait` 通过 MCP 调用时，只要仍处于等待中，还会每 30 秒发送一次 progress notification。
 
 ---
 
@@ -390,6 +395,8 @@ wait 始终是 **scope 级操作**，这是有意为之：
 
 - `auto_response_at`
 - `is_timeout_auto_response`
+
+如果通过 MCP 调用 `hitl_wait`，等待期间还会每 30 秒发送一次 `notifications/progress` 更新。
 
 ### `hitl_get_pending_questions`
 
@@ -685,7 +692,7 @@ observability:
 - `HITL_STORAGE=memory`
 - 让客户端或测试工具显式发送 `x-agent-identity`
 - `HITL_WAIT_MODE` 保持 `terminal_only`
-- 该模式下不会启用超时自动应答
+- 该模式在单进程内支持超时自动应答
 
 #### 共享开发环境或测试环境
 
@@ -737,6 +744,8 @@ observability:
 
 在 Redis 模式下，超时自动应答也会产生 waiter 通知。超时 worker 会通过 Redis pub/sub 发布 scope 更新，因此即使 waiter 挂在另一个实例上，也能被正确唤醒。
 
+在 memory 模式下，超时自动应答会通过同一个进程内 `Waiter` 直接通知等待中的调用方。
+
 ### 存储选择
 
 当前有两种存储模式：
@@ -744,7 +753,12 @@ observability:
 - **memory**：简单、进程内、本地开发和测试友好
 - **redis**：适合多进程和真实部署
 
-只有 Redis 模式会启用超时自动应答。它依赖：
+两种模式都支持超时自动应答，但范围不同：
+
+- **memory**：单进程 timeout worker，加上直接的 waiter 通知
+- **redis**：跨实例超时调度和分布式唤醒
+
+其中 Redis 模式额外依赖：
 
 - Redis sorted set 做超时调度
 - 短生命周期分布式锁避免多实例重复处理

@@ -99,4 +99,36 @@ describe('in-memory repository scoped create', () => {
     );
     expect(created.auto_response_deadline_at).toMatch(/T/);
   });
+
+  it('auto-responds timed out pending questions with timeout metadata', async () => {
+    const repository = new InMemoryHitlRepository();
+
+    const created = await repository.createPendingGroup({
+      agent_identity: 'api_key:a5',
+      agent_session_id: 'session-timeout-1',
+      title: 'Timed question',
+      timeout_seconds: 1,
+      questions: [
+        {
+          title: 'Approve?',
+          type: 'boolean',
+          default_answer: { value: true }
+        }
+      ]
+    });
+
+    await new Promise((resolve) => setTimeout(resolve, 1100));
+
+    const [result] = await repository.processTimedOutGroups();
+    const stored = await repository.getGroup(created.question_group_id);
+
+    expect(result?.groupId).toBe(created.question_group_id);
+    expect(stored?.questions[0]).toEqual(
+      expect.objectContaining({
+        status: 'answered',
+        answer: { value: true },
+        is_timeout_auto_response: true
+      })
+    );
+  });
 });

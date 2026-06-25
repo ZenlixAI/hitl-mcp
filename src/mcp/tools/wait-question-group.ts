@@ -12,6 +12,16 @@ export function registerWaitTool(server: MCPServer, service: HitlService, logger
       schema: waitQuestionsInputSchema
     },
     async (_input, ctx) => {
+      const startedAt = Date.now();
+      const progressTimer = setInterval(() => {
+        const elapsedSeconds = Math.floor((Date.now() - startedAt) / 1000);
+        void ctx?.reportProgress?.(
+          elapsedSeconds,
+          undefined,
+          'Waiting for human input'
+        );
+      }, 30_000);
+
       try {
         const result = await service.wait({
           caller: readCallerScopeFromMcpContext(ctx)
@@ -23,6 +33,8 @@ export function registerWaitTool(server: MCPServer, service: HitlService, logger
           error: err
         });
         return error(err instanceof Error ? err.message : 'failed to wait for questions');
+      } finally {
+        clearInterval(progressTimer);
       }
     }
   );

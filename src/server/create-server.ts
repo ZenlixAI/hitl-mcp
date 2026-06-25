@@ -16,6 +16,7 @@ import { RedisHitlRepository } from '../storage/redis-hitl-repository.js';
 import { Waiter } from '../state/waiter.js';
 import { RedisTimeoutWorker } from '../state/redis-timeout-worker.js';
 import { redisKeys } from '../storage/redis-keys.js';
+import { MemoryTimeoutWorker } from '../state/memory-timeout-worker.js';
 
 async function resolveRepository(params: {
   storageKind: 'memory' | 'redis';
@@ -184,6 +185,13 @@ export async function createRuntime() {
       repository,
       publisher,
       eventChannel,
+      config.pending.timeoutPollIntervalSeconds
+    );
+    timeoutWorker.start();
+  } else if (repository instanceof InMemoryHitlRepository) {
+    const timeoutWorker = new MemoryTimeoutWorker(
+      repository,
+      waiter,
       config.pending.timeoutPollIntervalSeconds
     );
     timeoutWorker.start();
