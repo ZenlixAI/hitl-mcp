@@ -20,5 +20,8 @@ describe('mcp tool registration', () => {
 
     expect(hitlAsk.config.description).toContain('default_answer');
     expect(hitlAsk.config.description).toContain('900 seconds');
+    expect(hitlAsk.config.description).toContain('single_choice');
+    expect(hitlAsk.config.description).toContain('options[].value');
+    expect(hitlAsk.config.description).toContain('multi_choice');
   });
 });

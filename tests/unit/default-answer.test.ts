@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { deriveDefaultAnswer, validateQuestionDefaultAnswer } from '../../src/domain/default-answer.js';
+import { deriveDefaultAnswer, resolveDefaultAnswer, validateQuestionDefaultAnswer } from '../../src/domain/default-answer.js';
 
 describe('default answer derivation', () => {
   it('derives the first single choice option', () => {
@@ -38,6 +38,42 @@ describe('default answer derivation', () => {
         required: true
       },
       { value: 99 }
+    );
+
+    expect(result.ok).toBe(false);
+  });
+
+  it('rejects single_choice default answers that are not option values with a clear error', () => {
+    expect(() =>
+      resolveDefaultAnswer(
+        {
+          question_id: 'q_1',
+          type: 'single_choice',
+          title: 'Mood',
+          options: [
+            { value: 'happy', label: 'Happy' },
+            { value: 'neutral', label: 'Neutral' }
+          ],
+          required: true
+        },
+        { value: false }
+      )
+    ).toThrow(/single_choice/i);
+  });
+
+  it('rejects multi_choice default answers that contain non-option values', () => {
+    const result = validateQuestionDefaultAnswer(
+      {
+        question_id: 'q_1',
+        type: 'multi_choice',
+        title: 'Tags',
+        options: [
+          { value: 'a', label: 'A' },
+          { value: 'b', label: 'B' }
+        ],
+        required: true
+      },
+      { value: ['x'] }
     );
 
     expect(result.ok).toBe(false);

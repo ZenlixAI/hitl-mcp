@@ -15,7 +15,9 @@ const publicCreateQuestionFields = {
   tags: z.array(z.string()).optional(),
   extra: z.record(z.string(), z.any()).optional(),
   required: z.boolean().default(true),
-  default_answer: z.object({ value: z.any() }).optional()
+  default_answer: z
+    .object({ value: z.any() })
+    .optional()
 };
 
 const optionSchema = z.object({
@@ -74,18 +76,30 @@ export const questionSchema = z.discriminatedUnion('type', [
 const askSingleChoiceQuestionSchema = z.object({
   ...publicCreateQuestionFields,
   type: z.literal('single_choice'),
-  options: z.array(optionSchema).min(1)
+  options: z.array(optionSchema).min(1),
+  default_answer: z
+    .object({ value: z.any() })
+    .describe('Optional fallback answer. For single_choice, default_answer.value must equal one of options[].value.')
+    .optional()
 }).strict();
 
 const askMultiChoiceQuestionSchema = z.object({
   ...publicCreateQuestionFields,
   type: z.literal('multi_choice'),
-  options: z.array(optionSchema).min(1)
+  options: z.array(optionSchema).min(1),
+  default_answer: z
+    .object({ value: z.any() })
+    .describe('Optional fallback answer. For multi_choice, default_answer.value must be a string[] and each entry should equal one of options[].value.')
+    .optional()
 }).strict();
 
 const askTextQuestionSchema = z.object({
   ...publicCreateQuestionFields,
   type: z.literal('text'),
+  default_answer: z
+    .object({ value: z.any() })
+    .describe('Optional fallback answer. For text, default_answer.value must be a string.')
+    .optional(),
   text_constraints: z
     .object({
       min_length: z.number().int().min(0).optional(),
@@ -97,12 +111,20 @@ const askTextQuestionSchema = z.object({
 
 const askBooleanQuestionSchema = z.object({
   ...publicCreateQuestionFields,
-  type: z.literal('boolean')
+  type: z.literal('boolean'),
+  default_answer: z
+    .object({ value: z.any() })
+    .describe('Optional fallback answer. For boolean, default_answer.value must be true or false.')
+    .optional()
 }).strict();
 
 const askRangeQuestionSchema = z.object({
   ...publicCreateQuestionFields,
   type: z.literal('range'),
+  default_answer: z
+    .object({ value: z.any() })
+    .describe('Optional fallback answer. For range, default_answer.value must be a number within range_constraints.min and range_constraints.max.')
+    .optional(),
   range_constraints: z.object({
     min: z.number(),
     max: z.number(),
