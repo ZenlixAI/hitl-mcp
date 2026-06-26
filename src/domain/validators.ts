@@ -103,6 +103,14 @@ export function validateAnswerSet(
           reason: '多选格式错误',
           expected: 'string[]'
         });
+      } else if (
+        answer.value.some((v) => !question.options.some((opt) => opt.value === v))
+      ) {
+        errors.push({
+          question_id: question.question_id,
+          reason: '多选值非法',
+          expected: 'array of option values'
+        });
       }
       continue;
     }

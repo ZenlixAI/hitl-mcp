@@ -7,7 +7,7 @@ RUN corepack enable
 ENV NPM_CONFIG_REGISTRY=https://registry.npmmirror.com/
 ENV PNPM_CONFIG_REGISTRY=https://registry.npmmirror.com/
 
-COPY package.json pnpm-lock.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile
 
 COPY . .
@@ -24,7 +24,7 @@ ENV PNPM_CONFIG_REGISTRY=https://registry.npmmirror.com/
 
 RUN corepack enable
 
-COPY package.json pnpm-lock.yaml ./
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
 RUN pnpm install --frozen-lockfile --prod
 
 COPY --from=builder /app/dist ./dist

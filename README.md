@@ -169,7 +169,10 @@ Question groups may also define timeout behavior at creation time.
 - each question may set `default_answer`
 - if omitted, the server derives one by question type
 
-When the backend storage is Redis, timed-out pending questions are automatically answered with their resolved default answers.
+Timed-out pending questions are automatically answered with their resolved default answers.
+
+- in `memory` mode, this works for single-process deployments via an in-process timeout worker
+- in `redis` mode, this works across instances via Redis-backed timeout processing
 
 The derived defaults are:
 
@@ -192,6 +195,8 @@ Timeout-generated answers keep the normal `answered` status and add metadata suc
 - `progressive`: return after every state change, then let the caller wait again
 
 `terminal_only` is simpler for linear workflows. `progressive` is better when the caller needs to react to each intermediate update.
+
+When `hitl_wait` is called through MCP, it also emits a progress notification every 30 seconds while the wait is still pending.
 
 ---
 
@@ -392,6 +397,8 @@ When a result was produced by timeout automation, the resolved question may also
 
 - `auto_response_at`
 - `is_timeout_auto_response`
+
+When called over MCP, `hitl_wait` also sends `notifications/progress` updates every 30 seconds while still waiting.
 
 ### `hitl_get_pending_questions`
 
@@ -687,7 +694,7 @@ observability:
 - `HITL_STORAGE=memory`
 - send `x-agent-identity` from your client or test harness
 - keep `HITL_WAIT_MODE=terminal_only`
-- timeout auto-response is disabled in this mode
+- timeout auto-response is available in single-process memory mode
 
 ### Shared dev or staging
 
@@ -739,6 +746,8 @@ When answers or cancellations arrive:
 
 In Redis mode, timeout auto-response also produces waiter notifications. The timeout worker publishes scope updates through Redis pub/sub so a waiter blocked on one instance can still wake up when another instance performs the auto-response.
 
+In memory mode, timeout auto-response produces waiter notifications through the same in-process `Waiter` used for answer and cancellation events.
+
 ### Storage selection
 
 Two storage modes exist:
@@ -746,7 +755,12 @@ Two storage modes exist:
 - **memory**: simple, process-local, good for tests and local development
 - **redis**: durable across processes and suitable for real deployments
 
-Only the Redis mode enables timeout auto-response. It uses:
+Both modes enable timeout auto-response, but with different scope:
+
+- **memory**: single-process timeout worker and direct waiter notifications
+- **redis**: cross-instance timeout scheduling and distributed wakeups
+
+Redis mode additionally uses:
 
 - a Redis sorted set for due-time scheduling
 - short-lived distributed locks to avoid double-processing in multi-instance deployments

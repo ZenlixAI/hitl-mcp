@@ -2,7 +2,7 @@ import { randomUUID } from 'node:crypto';
 import type { CallerScope, ScopeQuestionSnapshot, ScopedQuestionGroup } from '../domain/types.js';
 import { validateAnswerSet } from '../domain/validators.js';
 import { transitionStatus } from '../state/status-machine.js';
-import type { CreatePendingGroupInput, FinalizeResult, HitlRepository } from './hitl-repository.js';
+import type { CreatePendingGroupInput, FinalizeResult, HitlRepository, TimeoutProcessResult } from './hitl-repository.js';
 
 export class InMemoryHitlRepository implements HitlRepository {
   private groups = new Map<string, ScopedQuestionGroup>();
@@ -348,5 +348,50 @@ export class InMemoryHitlRepository implements HitlRepository {
     group.updated_at = new Date().toISOString();
     this.syncPendingScope(group);
     return { status: 'expired', reason };
+  }
+
+  async processTimedOutGroups(): Promise<TimeoutProcessResult[]> {
+    const processed: TimeoutProcessResult[] = [];
+
+    for (const group of this.groups.values()) {
+      if (group.status !== 'pending') continue;
+      if (!group.auto_response_deadline_at || Date.parse(group.auto_response_deadline_at) > Date.now()) continue;
+
+      const pendingQuestions = (group.questions as Array<Record<string, unknown>>).filter(
+        (question) => question.status === 'pending'
+      );
+      if (pendingQuestions.length === 0) continue;
+
+      const now = new Date().toISOString();
+      for (const question of pendingQuestions) {
+        question.answer = question.default_answer;
+        question.status = 'answered';
+        question.auto_response_at = now;
+        question.is_timeout_auto_response = true;
+        question.updated_at = now;
+      }
+
+      group.updated_at = now;
+      group.timeout_status = 'processed';
+      this.recomputeGroupStatus(group);
+      this.syncPendingScope(group);
+
+      const changedQuestionIds = pendingQuestions.map((question) => String(question.question_id));
+      const snapshot = await this.getScopeSnapshot(
+        {
+          agent_identity: group.agent_identity,
+          agent_session_id: group.agent_session_id
+        },
+        changedQuestionIds
+      );
+
+      processed.push({
+        groupId: group.question_group_id,
+        scopeKey: this.scopeKey(group.agent_identity, group.agent_session_id),
+        snapshot
+      });
+    }
+
+    return processed;
   }
 }

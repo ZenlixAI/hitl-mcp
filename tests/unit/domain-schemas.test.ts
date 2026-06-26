@@ -60,6 +60,19 @@ describe('domain schemas', () => {
     expect(parsed.success).toBe(true);
   });
 
+  it('documents per-type default_answer guidance in the question schema', () => {
+    const shape = (askQuestionsInputSchema.shape.questions as any)._def.element.options;
+    const singleChoiceSchema = shape.find((option: any) => option.shape.type.value === 'single_choice');
+    const multiChoiceSchema = shape.find((option: any) => option.shape.type.value === 'multi_choice');
+    const singleChoiceDescription = singleChoiceSchema.shape.default_answer.unwrap().description;
+    const multiChoiceDescription = multiChoiceSchema.shape.default_answer.unwrap().description;
+
+    expect(singleChoiceDescription).toContain('options[].value');
+    expect(singleChoiceDescription).toContain('single_choice');
+    expect(multiChoiceDescription).toContain('string[]');
+    expect(multiChoiceDescription).toContain('options[].value');
+  });
+
   it('rejects non-positive timeout_seconds in ask schema', () => {
     const parsed = askQuestionsInputSchema.safeParse({
       title: 'group',

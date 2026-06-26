@@ -1,6 +1,5 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { HitlService } from '../../src/core/hitl-service.js';
-import { InMemoryHitlRepository } from '../../src/storage/in-memory-repository.js';
 import { RedisHitlRepository } from '../../src/storage/redis-hitl-repository.js';
 import { Waiter } from '../../src/state/waiter.js';
 import { RedisTimeoutWorker } from '../../src/state/redis-timeout-worker.js';
@@ -74,28 +73,4 @@ describe('redis timeout worker', () => {
     );
   });
 
-  it('does not auto-respond in memory mode', async () => {
-    const waiter = new Waiter();
-    const service = new HitlService(new InMemoryHitlRepository(), waiter, 0, 'terminal_only');
-    const caller = {
-      agent_identity: 'api_key:test-agent',
-      agent_session_id: 'session-memory-timeout'
-    };
-
-    await service.askQuestions({
-      caller,
-      input: {
-        title: 'Memory wait',
-        timeout_seconds: 1,
-        questions: [{ type: 'boolean', title: 'Approve?' }]
-      }
-    });
-
-    const outcome = await Promise.race([
-      service.wait({ caller }).then(() => 'resolved' as const),
-      new Promise<'pending'>((resolve) => setTimeout(() => resolve('pending'), 1500))
-    ]);
-
-    expect(outcome).toBe('pending');
-  });
 });

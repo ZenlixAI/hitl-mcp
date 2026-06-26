@@ -7,6 +7,7 @@ import { questionRoutes } from '../http/routes/questions.js';
 import { fail, ok } from '../http/response.js';
 import { injectCallerScopeIntoMcpState } from '../mcp/caller-scope.js';
 import { registerHitlTools } from '../mcp/register-tools.js';
+import { attachMcpSessionLogging } from '../mcp/session-logging.js';
 import { Logger } from '../observability/logger.js';
 import { HitlMetrics } from '../observability/metrics.js';
 import type { HitlRepository } from '../storage/hitl-repository.js';
@@ -16,6 +17,7 @@ import { RedisHitlRepository } from '../storage/redis-hitl-repository.js';
 import { Waiter } from '../state/waiter.js';
 import { RedisTimeoutWorker } from '../state/redis-timeout-worker.js';
 import { redisKeys } from '../storage/redis-keys.js';
+import { MemoryTimeoutWorker } from '../state/memory-timeout-worker.js';
 
 async function resolveRepository(params: {
   storageKind: 'memory' | 'redis';
@@ -67,7 +69,8 @@ export async function createRuntime() {
     config.pending.maxWaitSeconds,
     config.pending.waitMode,
     metrics,
-    config.pending.defaultTimeoutSeconds
+    config.pending.defaultTimeoutSeconds,
+    logger
   );
   const server = new MCPServer({
     name: config.server.name,
@@ -77,6 +80,7 @@ export async function createRuntime() {
     host: config.http.host,
     baseUrl: config.server.baseUrl,
     favicon: 'favicon.ico',
+    stateless: false,
     icons: [
       {
         src: 'icon.svg',
@@ -85,6 +89,7 @@ export async function createRuntime() {
       }
     ]
   });
+  attachMcpSessionLogging(server as unknown as { sessions: Map<string, unknown> }, logger);
   server.use('mcp:tools/call', async (ctx, next) => {
     try {
       injectCallerScopeIntoMcpState(ctx, {
@@ -140,6 +145,8 @@ export async function createRuntime() {
   });
 
   app.use('/mcp*', questionContext);
+  app.use('/sse*', questionContext);
+
 
   app.use(`${config.http.apiPrefix}/questions`, questionContext);
   app.use(`${config.http.apiPrefix}/questions/pending`, questionContext);
@@ -185,6 +192,14 @@ export async function createRuntime() {
       publisher,
       eventChannel,
       config.pending.timeoutPollIntervalSeconds
+    );
+    timeoutWorker.start();
+  } else if (repository instanceof InMemoryHitlRepository) {
+    const timeoutWorker = new MemoryTimeoutWorker(
+      repository,
+      waiter,
+      config.pending.timeoutPollIntervalSeconds,
+      logger
     );
     timeoutWorker.start();
   }

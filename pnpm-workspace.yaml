@@ -1,0 +1,6 @@
+allowBuilds:
+  '@modelcontextprotocol/ext-apps': true
+  '@scarf/scarf': true
+  core-js: true
+  esbuild: true
+  protobufjs: true

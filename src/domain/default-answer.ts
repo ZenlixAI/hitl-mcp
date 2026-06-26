@@ -23,7 +23,16 @@ export function resolveDefaultAnswer(question: Question, explicit?: AnswerValue)
   const resolved = explicit ?? deriveDefaultAnswer(question);
   const validation = validateQuestionDefaultAnswer(question, resolved);
   if (!validation.ok) {
-    throw new DomainError('ANSWER_VALIDATION_FAILED', 'invalid default answer');
+    const primaryError = validation.errors[0];
+    const suffix = question.type === 'single_choice'
+      ? ` Expected one of options[].value: ${question.options.map((option) => option.value).join(', ')}.`
+      : question.type === 'multi_choice'
+        ? ` Expected a string[] using values from options[].value: ${question.options.map((option) => option.value).join(', ')}.`
+        : '';
+    throw new DomainError(
+      'ANSWER_VALIDATION_FAILED',
+      `invalid default answer for question "${question.title}": ${question.type} default_answer.value ${primaryError?.expected ?? 'is invalid'}.${suffix}`
+    );
   }
   return resolved;
 }

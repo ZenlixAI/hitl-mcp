@@ -16,6 +16,10 @@ export function registerAskTool(
       description:
         'Create one or more pending questions for the current caller scope. ' +
         'Prefer setting explicit default_answer values when possible. ' +
+        'If default_answer is provided, default_answer.value must match the question type: ' +
+        'single_choice must equal one of options[].value; ' +
+        'multi_choice must be a string[] of options[].value; ' +
+        'text must be a string; boolean must be true or false; range must be a number within bounds. ' +
         'If omitted, the server derives a default answer per question type. ' +
         `The current default timeout is ${options.defaultTimeoutSeconds} seconds unless timeout_seconds is provided.`,
       schema: askQuestionsInputSchema

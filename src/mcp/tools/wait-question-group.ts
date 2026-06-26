@@ -12,6 +12,47 @@ export function registerWaitTool(server: MCPServer, service: HitlService, logger
       schema: waitQuestionsInputSchema
     },
     async (_input, ctx) => {
+      const startedAt = Date.now();
+      let progressInFlight = false;
+      const progressTimer = setInterval(() => {
+        if (progressInFlight) return;
+        progressInFlight = true;
+
+        void (async () => {
+          const elapsedSeconds = Math.floor((Date.now() - startedAt) / 1000);
+          const progressMessage = 'Waiting for human input';
+          const caller = readCallerScopeFromMcpContext(ctx);
+
+          try {
+            await ctx?.reportProgress?.(
+              elapsedSeconds,
+              undefined,
+              progressMessage
+            );
+            logger.info('mcp_wait_progress_sent', {
+              tool_name: 'hitl_wait',
+              agent_identity: caller.agent_identity,
+              agent_session_id: caller.agent_session_id,
+              progress: elapsedSeconds,
+              elapsed_seconds: elapsedSeconds,
+              progress_message: progressMessage
+            });
+          } catch (error) {
+            logger.warn('mcp_wait_progress_failed', {
+              tool_name: 'hitl_wait',
+              agent_identity: caller.agent_identity,
+              agent_session_id: caller.agent_session_id,
+              progress: elapsedSeconds,
+              elapsed_seconds: elapsedSeconds,
+              progress_message: progressMessage,
+              error
+            });
+          } finally {
+            progressInFlight = false;
+          }
+        })();
+      }, 30_000);
+
       try {
         const result = await service.wait({
           caller: readCallerScopeFromMcpContext(ctx)
@@ -23,6 +64,8 @@ export function registerWaitTool(server: MCPServer, service: HitlService, logger
           error: err
         });
         return error(err instanceof Error ? err.message : 'failed to wait for questions');
+      } finally {
+        clearInterval(progressTimer);
       }
     }
   );
