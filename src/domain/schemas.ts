@@ -26,10 +26,22 @@ const optionSchema = z.object({
   description: z.string().optional()
 });
 
+const followupFieldSchema = z.object({
+  id: z.string().min(1),
+  type: z.literal('text'),
+  label: z.string().min(1),
+  required: z.boolean().optional(),
+  description: z.string().optional()
+});
+
+const singleChoiceOptionSchema = optionSchema.extend({
+  followup_fields: z.array(followupFieldSchema).optional()
+});
+
 const singleChoiceQuestionSchema = z.object({
   ...commonQuestionFields,
   type: z.literal('single_choice'),
-  options: z.array(optionSchema).min(1)
+  options: z.array(singleChoiceOptionSchema).min(1)
 });
 
 const multiChoiceQuestionSchema = z.object({
@@ -76,7 +88,7 @@ export const questionSchema = z.discriminatedUnion('type', [
 const askSingleChoiceQuestionSchema = z.object({
   ...publicCreateQuestionFields,
   type: z.literal('single_choice'),
-  options: z.array(optionSchema).min(1),
+  options: z.array(singleChoiceOptionSchema).min(1),
   default_answer: z
     .object({ value: z.any() })
     .describe('Optional fallback answer. For single_choice, default_answer.value must equal one of options[].value.')
@@ -174,11 +186,19 @@ export const waitQuestionsInputSchema = z.object({}).strict();
 
 export const submitAnswersInputSchema = z.object({
   idempotency_key: z.string().optional(),
-  answers: z.record(z.string(), z.object({ value: z.any() })).optional(),
+  answers: z.record(
+    z.string(),
+    z
+      .object({
+        value: z.any(),
+        fields: z.record(z.string(), z.any()).optional()
+      })
+      .strict()
+  ).optional(),
   skipped_question_ids: z.array(z.string().min(1)).optional(),
   finalized_by: z.string().optional(),
   extra: z.record(z.string(), z.any()).optional()
-});
+}).strict();
 
 export const cancelQuestionsInputSchema = z
   .object({

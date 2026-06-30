@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { askQuestionGroupInputSchema, askQuestionsInputSchema } from '../../src/domain/schemas.js';
+import {
+  askQuestionGroupInputSchema,
+  askQuestionsInputSchema,
+  submitAnswersInputSchema
+} from '../../src/domain/schemas.js';
 
 describe('domain schemas', () => {
   it('rejects single_choice without options', () => {
@@ -58,6 +62,67 @@ describe('domain schemas', () => {
     });
 
     expect(parsed.success).toBe(true);
+  });
+
+  it('accepts single_choice followup_fields in ask schema', () => {
+    const parsed = askQuestionsInputSchema.safeParse({
+      title: 'outline confirmation',
+      questions: [
+        {
+          type: 'single_choice',
+          title: 'confirm outline',
+          options: [
+            { value: 'approved', label: 'Approved' },
+            {
+              value: 'revise',
+              label: 'Revise',
+              followup_fields: [
+                {
+                  id: 'comment',
+                  type: 'text',
+                  label: 'Revision comment',
+                  required: true,
+                  description: 'Explain what should change.'
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    });
+
+    expect(parsed.success).toBe(true);
+  });
+
+  it('accepts submit answers with value only or value plus fields', () => {
+    const parsed = submitAnswersInputSchema.safeParse({
+      answers: {
+        q_approved: { value: 'approved' },
+        q_revise: {
+          value: 'revise',
+          fields: {
+            comment: 'Please add recovery conditions.'
+          }
+        }
+      }
+    });
+
+    expect(parsed.success).toBe(true);
+  });
+
+  it('rejects legacy feedback in submit answers schema', () => {
+    const parsed = submitAnswersInputSchema.safeParse({
+      answers: {
+        q_revise: {
+          value: 'revise',
+          feedback: {
+            comment: 'legacy field'
+          }
+        }
+      }
+    });
+
+    expect(parsed.success).toBe(false);
   });
 
   it('documents per-type default_answer guidance in the question schema', () => {

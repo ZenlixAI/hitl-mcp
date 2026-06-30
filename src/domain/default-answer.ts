@@ -1,10 +1,8 @@
 import { DomainError } from './errors.js';
 import { validateAnswerSet, type ValidationResult } from './validators.js';
-import type { Question } from './types.js';
+import type { DefaultAnswerValue, Question } from './types.js';
 
-export type AnswerValue = { value: unknown };
-
-export function deriveDefaultAnswer(question: Question): AnswerValue {
+export function deriveDefaultAnswer(question: Question): DefaultAnswerValue {
   if (question.type === 'single_choice') return { value: question.options[0].value };
   if (question.type === 'multi_choice') return { value: [question.options[0].value] };
   if (question.type === 'text') return { value: 'none' };
@@ -14,12 +12,12 @@ export function deriveDefaultAnswer(question: Question): AnswerValue {
 
 export function validateQuestionDefaultAnswer(
   question: Question,
-  answer: AnswerValue
+  answer: DefaultAnswerValue
 ): ValidationResult {
   return validateAnswerSet([question], { [question.question_id]: answer });
 }
 
-export function resolveDefaultAnswer(question: Question, explicit?: AnswerValue): AnswerValue {
+export function resolveDefaultAnswer(question: Question, explicit?: DefaultAnswerValue): DefaultAnswerValue {
   const resolved = explicit ?? deriveDefaultAnswer(question);
   const validation = validateQuestionDefaultAnswer(question, resolved);
   if (!validation.ok) {

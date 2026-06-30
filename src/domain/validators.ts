@@ -1,4 +1,4 @@
-import type { Question } from './types.js';
+import type { AnswerFields, Question } from './types.js';
 
 export type ValidationError = {
   question_id: string;
@@ -12,7 +12,7 @@ export type ValidationResult =
 
 export function validateAnswerSet(
   questions: Question[],
-  answers: Record<string, { value: unknown }>,
+  answers: Record<string, { value: unknown; fields?: AnswerFields }>,
   skippedQuestionIds: string[] = []
 ): ValidationResult {
   const errors: ValidationError[] = [];
@@ -89,6 +89,36 @@ export function validateAnswerSet(
           reason: '单选值非法',
           expected: 'one option value'
         });
+        continue;
+      }
+
+      const selectedOption = question.options.find((opt) => opt.value === answer.value);
+      const followupFields = selectedOption?.followup_fields ?? [];
+      const fields = answer.fields;
+
+      if (fields !== undefined) {
+        if (!fields || typeof fields !== 'object' || Array.isArray(fields)) {
+          errors.push({
+            question_id: question.question_id,
+            reason: '补充字段格式错误',
+            expected: 'fields object'
+          });
+          continue;
+        }
+      }
+
+      for (const followupField of followupFields) {
+        if (!followupField.required) continue;
+        const fieldValue = fields?.[followupField.id];
+        if (followupField.type === 'text') {
+          if (typeof fieldValue !== 'string' || fieldValue.trim() === '') {
+            errors.push({
+              question_id: question.question_id,
+              reason: '补充字段缺失或为空',
+              expected: `fields.${followupField.id} must be a non-empty string`
+            });
+          }
+        }
       }
       continue;
     }

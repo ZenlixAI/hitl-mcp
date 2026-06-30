@@ -263,14 +263,26 @@ curl -X POST "http://localhost:3000/api/v1/questions" \
   -H "x-agent-identity: agent/example" \
   -H "x-agent-session-id: session-123" \
   -d '{
-    "title": "Release decision",
+    "title": "Outline confirmation",
     "questions": [
       {
         "type": "single_choice",
-        "title": "Deploy to production?",
+        "title": "Confirm the current outline",
         "options": [
-          { "value": "yes", "label": "Yes" },
-          { "value": "no", "label": "No" }
+          { "value": "approved", "label": "Approved" },
+          {
+            "value": "revise",
+            "label": "Revise",
+            "followup_fields": [
+              {
+                "id": "comment",
+                "type": "text",
+                "label": "Revision comment",
+                "required": true,
+                "description": "Explain what should change."
+              }
+            ]
+          }
         ]
       }
     ]
@@ -527,12 +539,24 @@ HTTP 控制面主要面向运营界面、业务后端和排障工具。
   "questions": [
     {
       "type": "single_choice",
-      "title": "Deploy to production?",
+      "title": "Confirm the current outline",
       "options": [
-        { "value": "yes", "label": "Yes" },
-        { "value": "no", "label": "No" }
+        { "value": "approved", "label": "Approved" },
+        {
+          "value": "revise",
+          "label": "Revise",
+          "followup_fields": [
+            {
+              "id": "comment",
+              "type": "text",
+              "label": "Revision comment",
+              "required": true,
+              "description": "Explain what should change."
+            }
+          ]
+        }
       ],
-      "default_answer": { "value": "no" }
+      "default_answer": { "value": "approved" }
     },
     {
       "type": "text",
@@ -547,6 +571,7 @@ HTTP 控制面主要面向运营界面、业务后端和排障工具。
 支持的问题体：
 
 - `single_choice`，带 `options`
+- `single_choice.options[].followup_fields`，用于声明选项级文本补充输入
 - `multi_choice`，带 `options`
 - `text`，可选 `text_constraints`
 - `boolean`
@@ -570,7 +595,12 @@ HTTP 控制面主要面向运营界面、业务后端和排障工具。
 ```json
 {
   "answers": {
-    "q_01JXYZ...": { "value": "yes" }
+    "q_01JXYZ...": {
+      "value": "revise",
+      "fields": {
+        "comment": "Please add recovery conditions."
+      }
+    }
   },
   "skipped_question_ids": ["q_01JABC..."],
   "idempotency_key": "idem-1"
@@ -582,6 +612,7 @@ HTTP 控制面主要面向运营界面、业务后端和排障工具。
 - 支持部分提交
 - 服务端累积保存 scope 状态
 - 成功提交后会唤醒该 scope 的 waiter
+- 当不需要补充字段时，仍兼容仅提交 `{ value }`
 
 典型错误码：
 

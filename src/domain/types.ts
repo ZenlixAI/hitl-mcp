@@ -1,15 +1,17 @@
 import type { z } from 'zod';
 import type { askQuestionSchema, askQuestionsInputSchema, questionSchema, submitAnswersInputSchema } from './schemas.js';
 
-export type AnswerValue = { value: unknown };
+export type AnswerFields = Record<string, unknown>;
+export type AnswerValue = { value: unknown; fields?: AnswerFields };
+export type DefaultAnswerValue = { value: unknown };
 
 export type Question = z.infer<typeof questionSchema> & {
-  default_answer?: AnswerValue;
+  default_answer?: DefaultAnswerValue;
   auto_response_at?: string;
   is_timeout_auto_response?: boolean;
 };
 export type AskQuestion = z.infer<typeof askQuestionSchema> & {
-  default_answer?: AnswerValue;
+  default_answer?: DefaultAnswerValue;
 };
 export type AskQuestionsInput = z.infer<typeof askQuestionsInputSchema>;
 export type SubmitAnswersInput = z.infer<typeof submitAnswersInputSchema>;

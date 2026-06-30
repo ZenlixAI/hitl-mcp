@@ -84,4 +84,108 @@ describe('answer validator', () => {
       expect(invalid.errors[0].reason).toContain('必答题不能忽略');
     }
   });
+
+  it('requires fields.comment when selected single_choice option declares required followup_fields', () => {
+    const result = validateAnswerSet(
+      [
+        {
+          question_id: 'q_outline_confirm',
+          type: 'single_choice',
+          title: 'confirm outline',
+          required: true,
+          options: [
+            { value: 'approved', label: 'Approved' },
+            {
+              value: 'revise',
+              label: 'Revise',
+              followup_fields: [
+                {
+                  id: 'comment',
+                  type: 'text',
+                  label: 'Comment',
+                  required: true
+                }
+              ]
+            }
+          ]
+        }
+      ] as any,
+      { q_outline_confirm: { value: 'revise' } }
+    );
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.errors[0].reason).toContain('补充字段');
+      expect(result.errors[0].expected).toContain('fields.comment');
+    }
+  });
+
+  it('accepts fields.comment when selected single_choice option declares required followup_fields', () => {
+    const result = validateAnswerSet(
+      [
+        {
+          question_id: 'q_outline_confirm',
+          type: 'single_choice',
+          title: 'confirm outline',
+          required: true,
+          options: [
+            { value: 'approved', label: 'Approved' },
+            {
+              value: 'revise',
+              label: 'Revise',
+              followup_fields: [
+                {
+                  id: 'comment',
+                  type: 'text',
+                  label: 'Comment',
+                  required: true
+                }
+              ]
+            }
+          ]
+        }
+      ] as any,
+      {
+        q_outline_confirm: {
+          value: 'revise',
+          fields: {
+            comment: 'Please add recovery conditions.'
+          }
+        }
+      }
+    );
+
+    expect(result.ok).toBe(true);
+  });
+
+  it('accepts value-only answers when selected single_choice option has no followup_fields', () => {
+    const result = validateAnswerSet(
+      [
+        {
+          question_id: 'q_outline_confirm',
+          type: 'single_choice',
+          title: 'confirm outline',
+          required: true,
+          options: [
+            { value: 'approved', label: 'Approved' },
+            {
+              value: 'revise',
+              label: 'Revise',
+              followup_fields: [
+                {
+                  id: 'comment',
+                  type: 'text',
+                  label: 'Comment',
+                  required: true
+                }
+              ]
+            }
+          ]
+        }
+      ] as any,
+      { q_outline_confirm: { value: 'approved' } }
+    );
+
+    expect(result.ok).toBe(true);
+  });
 });
