@@ -10,14 +10,25 @@ Input:
 
 ```json
 {
-  "title": "Release Decision",
+  "title": "Outline Confirmation",
   "questions": [
     {
       "type": "single_choice",
-      "title": "Can we start canary deployment?",
+      "title": "Confirm the current outline",
       "options": [
-        { "value": "yes", "label": "Yes" },
-        { "value": "no", "label": "No" }
+        { "value": "approved", "label": "Approved" },
+        {
+          "value": "revise",
+          "label": "Revise",
+          "followup_fields": [
+            {
+              "id": "comment",
+              "type": "text",
+              "label": "Revision comment",
+              "required": true
+            }
+          ]
+        }
       ]
     }
   ]
@@ -104,12 +115,19 @@ Input:
 ```json
 {
   "answers": {
-    "q_01JXYZ...": { "value": "yes" }
+    "q_01JXYZ...": {
+      "value": "revise",
+      "fields": {
+        "comment": "Please add recovery conditions."
+      }
+    }
   },
   "skipped_question_ids": ["q_01JABC..."],
   "idempotency_key": "idem-1"
 }
 ```
+
+`answers[question_id]` remains backward compatible with plain `{ "value": ... }` when the selected option does not require follow-up fields.
 
 Output:
 
@@ -124,10 +142,20 @@ Output:
       "question": {
         "question_id": "q_01JXYZ...",
         "status": "answered",
-        "answer": { "value": "yes" }
+        "answer": {
+          "value": "revise",
+          "fields": {
+            "comment": "Please add recovery conditions."
+          }
+        }
       },
       "status": "answered",
-      "answer": { "value": "yes" }
+      "answer": {
+        "value": "revise",
+        "fields": {
+          "comment": "Please add recovery conditions."
+        }
+      }
     },
     {
       "question": {

@@ -8,7 +8,9 @@ export function registerSubmitAnswersTool(server: MCPServer, service: HitlServic
   server.tool(
     {
       name: 'hitl_submit_answers',
-      description: 'Submit answers or skips for pending questions in the current caller scope.',
+      description:
+        'Submit answers or skips for pending questions in the current caller scope. ' +
+        'Answers always include value and may also include fields when the selected single_choice option declares followup_fields.',
       schema: submitAnswersInputSchema,
       annotations: {
         destructiveHint: false,

@@ -150,4 +150,111 @@ describe('http submit validation', () => {
     const messages = logSpy.mock.calls.map((call) => String(call[0]));
     expect(messages.some((line) => line.includes('"message":"submit_answers_failed"') && line.includes('"level":"warn"'))).toBe(true);
   });
+
+  it('returns 422 when selected single_choice option requires followup comment but fields.comment is missing', async () => {
+    const runtime = await createRuntime();
+    const created = await runtime.repository.createPendingGroup({
+      agent_identity: 'api_key:test-agent',
+      agent_session_id: 'session-followup-missing-1',
+      title: 'group',
+      questions: [
+        {
+          question_id: 'q_outline_confirm',
+          type: 'single_choice',
+          title: 'confirm outline',
+          options: [
+            { value: 'approved', label: 'Approved' },
+            {
+              value: 'revise',
+              label: 'Revise',
+              followup_fields: [
+                {
+                  id: 'comment',
+                  type: 'text',
+                  label: 'Comment',
+                  required: true
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    });
+    const questionId = String(created.questions[0].question_id);
+
+    const res = await runtime.app.request('/api/v1/questions/answers', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-agent-identity': 'api_key:test-agent',
+        'x-agent-session-id': 'session-followup-missing-1'
+      },
+      body: JSON.stringify({ answers: { [questionId]: { value: 'revise' } } })
+    });
+
+    expect(res.status).toBe(422);
+    const body = await res.json();
+    expect(body.error.code).toBe('ANSWER_VALIDATION_FAILED');
+  });
+
+  it('accepts value plus fields when selected single_choice option declares required followup_fields', async () => {
+    const runtime = await createRuntime();
+    const created = await runtime.repository.createPendingGroup({
+      agent_identity: 'api_key:test-agent',
+      agent_session_id: 'session-followup-present-1',
+      title: 'group',
+      questions: [
+        {
+          question_id: 'q_outline_confirm',
+          type: 'single_choice',
+          title: 'confirm outline',
+          options: [
+            { value: 'approved', label: 'Approved' },
+            {
+              value: 'revise',
+              label: 'Revise',
+              followup_fields: [
+                {
+                  id: 'comment',
+                  type: 'text',
+                  label: 'Comment',
+                  required: true
+                }
+              ]
+            }
+          ]
+        }
+      ]
+    });
+    const questionId = String(created.questions[0].question_id);
+
+    const res = await runtime.app.request('/api/v1/questions/answers', {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-agent-identity': 'api_key:test-agent',
+        'x-agent-session-id': 'session-followup-present-1'
+      },
+      body: JSON.stringify({
+        answers: {
+          [questionId]: {
+            value: 'revise',
+            fields: {
+              comment: 'Please add recovery conditions.'
+            }
+          }
+        }
+      })
+    });
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.data.status).toBe('completed');
+    expect(body.data.resolved_questions[0].answer).toEqual({
+      value: 'revise',
+      fields: {
+        comment: 'Please add recovery conditions.'
+      }
+    });
+  });
 });

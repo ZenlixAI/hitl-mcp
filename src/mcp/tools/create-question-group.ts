@@ -20,6 +20,7 @@ export function registerAskTool(
         'single_choice must equal one of options[].value; ' +
         'multi_choice must be a string[] of options[].value; ' +
         'text must be a string; boolean must be true or false; range must be a number within bounds. ' +
+        'single_choice options may declare followup_fields, and selected followup values are submitted later via answers[question_id].fields. ' +
         'If omitted, the server derives a default answer per question type. ' +
         `The current default timeout is ${options.defaultTimeoutSeconds} seconds unless timeout_seconds is provided.`,
       schema: askQuestionsInputSchema

@@ -109,6 +109,7 @@ A question has:
 - a server-generated `question_id`
 - a `type`
 - prompt metadata such as `title`, `description`, `tags`, and `extra`
+- for `single_choice`, each option may also declare `followup_fields`
 - an optional `default_answer`
 - a status such as `pending`, `answered`, `skipped`, or `cancelled`
 
@@ -159,6 +160,12 @@ The server accepts incremental progress:
 - answer another question later
 - skip optional questions explicitly
 - continue waiting until the scope becomes complete
+
+Answer payloads remain backward compatible:
+
+- existing callers may continue sending `{ value }`
+- when a selected `single_choice` option declares `followup_fields`, callers may send `{ value, fields }`
+- required `followup_fields` are validated against the selected option
 
 ### Timeout auto-response
 
@@ -263,14 +270,26 @@ curl -X POST "http://localhost:3000/api/v1/questions" \
   -H "x-agent-identity: agent/example" \
   -H "x-agent-session-id: session-123" \
   -d '{
-    "title": "Release decision",
+    "title": "Outline confirmation",
     "questions": [
       {
         "type": "single_choice",
-        "title": "Deploy to production?",
+        "title": "Confirm the current outline",
         "options": [
-          { "value": "yes", "label": "Yes" },
-          { "value": "no", "label": "No" }
+          { "value": "approved", "label": "Approved" },
+          {
+            "value": "revise",
+            "label": "Revise",
+            "followup_fields": [
+              {
+                "id": "comment",
+                "type": "text",
+                "label": "Revision comment",
+                "required": true,
+                "description": "Explain what should change."
+              }
+            ]
+          }
         ]
       }
     ]
@@ -529,12 +548,24 @@ Request body:
   "questions": [
     {
       "type": "single_choice",
-      "title": "Deploy to production?",
+      "title": "Confirm the current outline",
       "options": [
-        { "value": "yes", "label": "Yes" },
-        { "value": "no", "label": "No" }
+        { "value": "approved", "label": "Approved" },
+        {
+          "value": "revise",
+          "label": "Revise",
+          "followup_fields": [
+            {
+              "id": "comment",
+              "type": "text",
+              "label": "Revision comment",
+              "required": true,
+              "description": "Explain what should change."
+            }
+          ]
+        }
       ],
-      "default_answer": { "value": "no" }
+      "default_answer": { "value": "approved" }
     },
     {
       "type": "text",
@@ -549,6 +580,7 @@ Request body:
 Supported question payloads:
 
 - `single_choice` with `options`
+- `single_choice.options[].followup_fields` for option-specific text follow-up inputs
 - `multi_choice` with `options`
 - `text` with optional `text_constraints`
 - `boolean`
@@ -572,7 +604,12 @@ Request body:
 ```json
 {
   "answers": {
-    "q_01JXYZ...": { "value": "yes" }
+    "q_01JXYZ...": {
+      "value": "revise",
+      "fields": {
+        "comment": "Please add recovery conditions."
+      }
+    }
   },
   "skipped_question_ids": ["q_01JABC..."],
   "idempotency_key": "idem-1"
@@ -584,6 +621,7 @@ Behavior:
 - accepts partial progress
 - persists cumulative scope state
 - wakes scope waiters after successful submission
+- continues to accept plain `{ value }` answers when no follow-up fields are required
 
 Typical error codes:
 

@@ -120,14 +120,25 @@ Ask:
 
 ```json
 {
-  "title": "Release Decision",
+  "title": "Outline Confirmation",
   "questions": [
     {
       "type": "single_choice",
-      "title": "Can we start canary deployment?",
+      "title": "Confirm the current outline",
       "options": [
-        { "value": "yes", "label": "Yes" },
-        { "value": "no", "label": "No" }
+        { "value": "approved", "label": "Approved" },
+        {
+          "value": "revise",
+          "label": "Revise",
+          "followup_fields": [
+            {
+              "id": "comment",
+              "type": "text",
+              "label": "Revision comment",
+              "required": true
+            }
+          ]
+        }
       ]
     },
     {
@@ -146,10 +157,17 @@ Submit part of the progress:
 ```json
 {
   "answers": {
-    "q_01JXYZ...": { "value": "yes" }
+    "q_01JXYZ...": {
+      "value": "revise",
+      "fields": {
+        "comment": "Please add recovery conditions."
+      }
+    }
   }
 }
 ```
+
+When no follow-up fields are needed, submitting plain `{ "value": ... }` remains valid.
 
 Skip the optional remainder:
 
